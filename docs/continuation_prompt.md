@@ -41,12 +41,14 @@ Important repository state:
 - Large data and generated reports under `data/` are intentionally ignored but
   are important local research state.
 - Do not delete, clean, reset, or revert anything unless explicitly asked.
-- The verified test suite had 107 passing tests at the 2026-08-10 handoff.
+- The verified test suite had 117 passing tests at the 2026-08-20 handoff.
 
 Important model state:
 
 - Frozen incumbent: 365-day half-life, 8-round mean prior, 20-round variance
-  prior, seeded joint-field simulator, ordinary top-65-and-ties cut assumption.
+  prior, seeded joint-field simulator. Ordinary top-65-and-ties cut is the
+  historical default; an explicit `no_cut` event-structure rule now exists and
+  is used for no-cut playoff events without changing 365/8/20 strength.
 - Supported by four rolling evaluation folds covering 182 tournaments versus a
   structural field baseline. This is NOT proof of betting edge.
 - Calibration slopes > 1 suggest compressed probabilities; watch this in
@@ -68,7 +70,9 @@ Completed and settled:
 - Course identity crosswalk: `config/course_aliases.csv`
   (`Pete Dye Stadium Course PGA West` deliberately unresolved).
 - Manifest-driven `predict-current-event` workflow: hash verification, locked
-  365/8/20, prospective eligibility, forecast bundle outputs.
+  365/8/20, prospective eligibility, forecast bundle outputs, explicit
+  `--cut-rule no_cut` support, and a pre-start timestamp guard
+  (`--event-start-at-utc`).
 - Wyndham Championship 2026 dry-run at
   `data/interim/reports/wyndham_championship_2026_frozen_simulation/`
   is permanently labeled `retrospective_replay` because start date equals
@@ -77,29 +81,32 @@ Completed and settled:
 
 Exact next task:
 
-1. Resolve the event-structure question before forecasting FedEx St. Jude
-   (2026-08-13 start). It is date-eligible but is a no-cut ~69-player playoff
-   event; the frozen workflow currently assumes an ordinary top-65 cut.
-2. Do not change frozen strength parameters (365/8/20) or casually rewrite the
-   frozen manifest.
-3. Choose an honest path:
-   - add explicit logged no-cut / field-size cut support without retuning
-     strength, then forecast St. Jude prospectively; OR
-   - skip playoff special-format events and wait for the next ordinary
-     full-field cut event.
-4. Forbidden: inventing a cut that does not exist, backfilling after tee time,
+1. The event-structure question is now resolved in code: `predict-current-event`
+   accepts `--cut-rule {top_n_and_ties,no_cut}` and requires a timezone-aware
+   `--event-start-at-utc` strictly after run creation for prospective runs.
+   Do NOT change frozen strength parameters (365/8/20).
+2. FedEx St. Jude (2026-08-13) and BMW (2026-08-20) are no longer prospectively
+   eligible. The next genuinely eligible event is the 2026 TOUR Championship:
+   competitive rounds 2026-08-27 to 2026-08-30 at East Lake, 30 players, no
+   cut, 72-hole stroke play, all players at even par.
+3. Its official top-30 field is final only after BMW concludes (2026-08-23).
+   After that, preserve the authoritative official field, resolve identities
+   safely, verify the first-tee UTC timestamp once tee times are posted, and run
+   `predict-current-event --cut-rule no_cut --event-start-at-utc <verified>`
+   WITHOUT `--allow-retrospective`, strictly before the Thursday 2026-08-27
+   first tee.
+4. Archive the bundle unchanged; grade top-20/top-10/top-5/winner later without
+   retuning. `make_cut` is structural (1.0) under no-cut and is not a
+   substantive target. Repeat across future events.
+5. Forbidden: inventing a cut that does not exist, backfilling after tee time,
    counting Wyndham as OOS, or using odds inside the performance model.
-5. Once structure is honest: preserve an authoritative independent field
-   (official PGA/FedExCup preferred), resolve identities safely, run
-   `predict-current-event` without `--allow-retrospective`, archive the bundle
-   unchanged, grade later without retuning, and repeat across events.
 6. Bovada timestamp collection may continue in parallel but must not block
    prospective performance validation.
 
 Watch-outs the previous session wants questioned:
 
 - Playoff no-cut / special formats vs top-65 simulator assumption.
-- Missing the St. Jude window after Thursday 2026-08-13 tee times.
+- Missing the TOUR Championship window after Thursday 2026-08-27 tee times.
 - Using Bovada as field-of-record instead of official PGA field.
 - Stale local history (`source_data_through=2026-07-11`) vs market knowledge.
 - Calibration compression and weak structural benchmarks tempting overclaim.
@@ -112,6 +119,9 @@ Do not reopen casually:
 - Course residual challenger remains not promoted.
 - Wyndham remains retrospective only.
 - Legacy Bovada value report remains exploratory only.
+- No-cut support and the pre-start guard are structural; they do not retune
+  strength and do not imply support for starting strokes or other special
+  formats.
 
 Keep `docs/project_handoff.md`, `docs/research_narrative.md`, README, roadmap,
 schema documentation, and this continuation prompt current as you work. At the

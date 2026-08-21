@@ -361,17 +361,33 @@ on the supplied field rather than independent binary estimates.
 - `strengths.csv`: point-in-time round strength using parameters loaded from
   the frozen incumbent manifest
 - `predictions.csv`: seeded joint-field placement probabilities
-- `report.md`: prospective/retrospective classification, field diagnostics,
-  frozen parameters, and performance-only rankings
+- `report.md`: prospective/retrospective classification, event-structure
+  decision, field diagnostics, frozen parameters, and performance-only rankings
 - `run_manifest.json`: frozen-manifest hash, verified source hashes, field
   hash, artifact hashes, dates, eligibility status, match warnings, parameters,
-  simulation count, seed, and cut size
+  simulation count, seed, cut size, and event structure
 
 The command rejects stale frozen inputs, a future as-of date, ambiguous player
 names, unknown supplied player IDs, and non-prospective events by default.
 Unmatched names remain explicit tour-prior fallbacks. A historical replay
 requires an explicit override and is permanently labeled retrospective.
 Sportsbook prices and the unpromoted course challenger are not consumed.
+
+Event structure is explicit and separate from frozen strength parameters.
+`run_manifest.json` includes an `event_structure` object:
+
+- `format` (`72_hole_stroke_play`)
+- `rounds`
+- `cut_rule` (`top_n_and_ties` or `no_cut`)
+- `cut_applied`
+- `frozen_manifest_cut_size`
+- `effective_advancing_size`
+
+Under `no_cut` every active player advances and `make_cut_prob` is 1.0; that
+column is retained for compatibility but is structural, not an empirical target.
+Prospective runs additionally require a timezone-aware `event_start_at_utc`
+strictly after the run's `created_at_utc`, recorded with `pre_start_verified`.
+This prevents a forecast from being labeled prospective after the first tee.
 
 ### Simulation evaluation artifacts
 

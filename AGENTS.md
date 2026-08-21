@@ -33,7 +33,10 @@ Research rules:
   without an explicit, logged event-structure decision.
 
 The course identity crosswalk and frozen current-event workflow are complete.
-Wyndham 2026 is retrospective only. The exact next queued task is the first
-genuinely prospective frozen forecast under honest event-structure assumptions,
-described in `docs/project_handoff.md`. No background process or partially
-completed code edit is active as of the 2026-08-10 handoff refresh.
+The simulator now supports explicit `no_cut` event-structure handling and a
+pre-start timestamp guard; frozen 365/8/20 strength is unchanged. Wyndham 2026
+is retrospective only. The exact next queued task is the first genuinely
+prospective frozen forecast for the 2026 TOUR Championship (competitive rounds
+2026-08-27 to 2026-08-30; official field final after BMW concludes on
+2026-08-23), described in `docs/project_handoff.md`. No background process or
+partially completed code edit is active as of the 2026-08-20 handoff refresh.

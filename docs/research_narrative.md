@@ -120,6 +120,23 @@ The Wyndham Championship 2026 run was only possible with
 `retrospective_replay`. It proved the plumbing and exposed player-name matching
 issues. It must **not** be counted as prospective evidence.
 
+### Phase H — Explicit no-cut event-structure support
+
+The playoff no-cut question was resolved by adding a narrow, explicit
+`cut_rule` (`top_n_and_ties` default, `no_cut`) to the simulator and the frozen
+workflow, plus a pre-start timestamp guard (`--event-start-at-utc`) so a
+forecast cannot be classified prospective if it was created at or after the
+first tee. This is a structural adaptation; the frozen 365/8/20 strength
+parameters were not changed. Under `no_cut`, `make_cut_prob` is deterministic
+(1.0) and is not an empirical target.
+
+Timing reality: St. Jude (2026-08-13) and BMW (2026-08-20, Round 1 already
+complete) both closed before this path was available, so neither can be a
+prospective bundle. The next genuinely eligible event is the 2026 TOUR
+Championship (competitive rounds 2026-08-27 to 2026-08-30), a 30-player no-cut
+72-hole stroke-play event at East Lake with all players at even par. Its
+official top-30 field is only final after BMW concludes on 2026-08-23.
+
 ## Current Theory
 
 The working theory of the game, as of 2026-08-10:
@@ -147,6 +164,8 @@ The working theory of the game, as of 2026-08-10:
 - Hash-verified frozen current-event workflow.
 - Explicit `retrospective_replay` labeling instead of quietly loosening the
   prospective rule for Wyndham.
+- Adding explicit `no_cut` event-structure support and a pre-start timestamp
+  guard rather than inventing cuts or backdating playoff forecasts.
 
 ## Failures and Near-Misses Worth Remembering
 
@@ -158,6 +177,9 @@ The working theory of the game, as of 2026-08-10:
   alone still did not justify promotion.
 - Nearly counting Wyndham as out-of-sample because we had not looked at it
   “enough.” The rule is date eligibility, not vibes.
+- Losing the St. Jude and BMW prospective windows while the event-structure
+  question was still open. Structure must be resolved before, not during, the
+  week of a playoff event.
 - Describing progress as “halfway” when phases are unequal; that overstates
   prospective/market readiness.
 
@@ -170,58 +192,59 @@ Primary test:
 
 Required protocol:
 
-1. identify an eligible event starting strictly after 2026-08-06;
-2. preserve an authoritative independent field before the event;
+1. identify an eligible event starting strictly after 2026-08-06 (next: 2026
+   TOUR Championship, competitive rounds 2026-08-27 to 2026-08-30);
+2. preserve an authoritative independent field before the event (official
+   top-30 field is final after BMW concludes on 2026-08-23);
 3. resolve player identities safely;
-4. run `predict-current-event` without `--allow-retrospective`;
+4. run `predict-current-event --cut-rule no_cut --event-start-at-utc <verified>`
+   without `--allow-retrospective`;
 5. archive the complete forecast bundle unchanged;
-6. grade after the tournament without retuning;
+6. grade top-20/top-10/top-5/winner after the tournament without retuning;
+   `make_cut` is structural (1.0) under no-cut and is not a substantive target;
 7. repeat across multiple events.
 
 Bovada timestamp collection may continue in parallel. Odds must not block this
 loop. Legacy heuristic rankings/value reports remain exploratory only.
 
-## Where We Are On The Calendar (2026-08-10)
+## Where We Are On The Calendar (2026-08-20)
 
 - Prospective threshold: events must start **strictly after** 2026-08-06.
 - Wyndham (start 2026-08-06): retrospective engineering replay only.
-- Next PGA slate after Wyndham: FedExCup Playoffs.
-  - FedEx St. Jude Championship: competitive dates **2026-08-13 to 2026-08-16**
-    at TPC Southwind; top-70 qualifying field, about 69 starters after a
-    withdrawal, **no cut**.
-  - BMW Championship: 2026-08-20 to 2026-08-23; ~50 players; playoff structure.
-  - TOUR Championship: 2026-08-24 to 2026-08-30; 30 players; special format.
-- As of this handoff evening, no prospective forecast bundle has been archived
-  yet. The St. Jude pre-tournament window is open only until Thursday tee times.
+- FedEx St. Jude Championship (2026-08-13): window closed before no-cut support;
+  not prospectively eligible.
+- BMW Championship (2026-08-20 to 2026-08-23): Round 1 already complete at this
+  handoff; not prospectively eligible.
+- 2026 TOUR Championship: competitive dates **2026-08-27 to 2026-08-30** at East
+  Lake Golf Club; 30 players; no cut; 72-hole stroke play; all players start at
+  even par. This is the next genuinely eligible prospective event.
+- As of this handoff, no prospective forecast bundle has been archived yet. The
+  TOUR Championship field is not final until BMW concludes on 2026-08-23, and
+  the forecast must run strictly before the Thursday 2026-08-27 first tee.
 
 ## Critical Watch-Outs For The Next Session
 
 These are outward-looking concerns, not settled conclusions. The next agent
 should question them before acting.
 
-### 1. Event-structure mismatch on playoff events (highest priority)
+### 1. Event-structure mismatch on playoff events (resolved in code, timing tight)
 
-The frozen simulator assumes ordinary 72-hole stroke play with a
-**top-65-and-ties cut after two rounds**. FedEx St. Jude is a **no-cut**
-~69-player field. BMW and the TOUR Championship also violate ordinary full-field
-cut assumptions.
+The frozen simulator originally assumed ordinary 72-hole stroke play with a
+**top-65-and-ties cut after two rounds**. FedExCup Playoffs events are
+**no-cut**. An explicit `cut_rule` (`no_cut`) is now implemented without
+changing half-life/priors, and prospective runs require a pre-start timestamp.
 
-Blindly running `predict-current-event` with frozen `cut_size=65` on St. Jude
-would invent a cut that does not exist and distort make-cut and placement
-probabilities. Changing half-life/priors is retuning and forbidden. Encoding the
-true event structure (no-cut / field-size cut) is a different question and must
-be handled explicitly, documented in the run manifest, and not confused with
-parameter hunting.
-
-If no-cut support is not cleanly available, the honest first prospective event
-may need to be the next ordinary full-field cut tournament after the playoffs,
-not a forced playoff forecast.
+The 2026 TOUR Championship is the next eligible event (30 players, no cut, even
+par). Its field is final only after BMW concludes on **2026-08-23**, and the
+forecast must run strictly before the **Thursday 2026-08-27** first tee. Do not
+backfill after tee time and do not invent a cut that does not exist.
 
 ### 2. Prospective window can be missed
 
-St. Jude starts 2026-08-13. If the handoff is opened after Thursday tee times,
-do not backfill a “prospective” forecast. Move to the next eligible event and
-keep the eligibility rule strict.
+St. Jude (2026-08-13) and BMW (2026-08-20) were both missed while the event-
+structure question was still open. If the TOUR Championship field cannot be
+preserved and run before Thursday tee times, do not force it; wait for the next
+eligible event and keep the eligibility rule strict.
 
 ### 3. Field authority
 

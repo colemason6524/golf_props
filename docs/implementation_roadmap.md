@@ -478,15 +478,24 @@ A Wyndham Championship 2026 dry-run was archived as
 `retrospective_replay` because its start date equals the prospective
 threshold. It is not prospective evidence.
 
-The immediate next operational task is still the first genuinely prospective
-forecast for an event starting after 2026-08-06, but only under honest event-
-structure assumptions. FedEx St. Jude (2026-08-13) is date-eligible and
-calendar-next, yet it is a no-cut playoff event that conflicts with the
-ordinary top-65-and-ties cut assumption. Resolve that explicitly before
-running, or wait for the next ordinary full-field cut event. Preserve any
-valid prospective run unchanged for later grading. Sportsbook comparison
-remains a separate later layer and must not turn structural-baseline evidence
-into a betting-edge claim.
+The playoff no-cut / event-structure question is now resolved in code. The
+simulator supports an explicit `cut_rule` (`top_n_and_ties` default, `no_cut`)
+and prospective runs require a timezone-aware `--event-start-at-utc` timestamp
+strictly after run creation, so a forecast cannot be backfilled after tee time.
+Frozen 365/8/20 strength parameters are unchanged; `make_cut` is structural
+(1.0) under `no_cut` and is not an empirical target for such events.
+
+St. Jude (2026-08-13) and BMW (2026-08-20) are no longer prospectively eligible.
+The next genuinely eligible event is the 2026 TOUR Championship (competitive
+rounds 2026-08-27 to 2026-08-30 at East Lake): 30 players, no cut, 72-hole
+stroke play, all players at even par. Its official top-30 field is final only
+after BMW concludes on 2026-08-23. Preserve that field, resolve identities,
+verify the first-tee timestamp, and run
+`predict-current-event --cut-rule no_cut --event-start-at-utc <verified>`
+strictly before the Thursday 2026-08-27 first tee. Preserve any valid
+prospective run unchanged for later grading. Sportsbook comparison remains a
+separate later layer and must not turn structural-baseline evidence into a
+betting-edge claim.
 
 The original performance-first modeling priorities were:
 
@@ -507,6 +516,10 @@ Performance-model implementation update:
 - implausible partial/corrupt round scores are filtered and reported
 - recency-weighted player strength with mean/variance shrinkage is implemented
 - seeded field-level simulation with a top-65-and-ties cut is implemented
+- explicit no-cut event-structure support (`cut_rule=no_cut`) is implemented
+  alongside the ordinary top-N-and-ties rule
+- pre-start timestamp verification is implemented so prospective forecasts
+  cannot be backfilled after the first tee
 - performance-only make-cut/top-N/winner probabilities are implemented
 - walk-forward comparison against structural field baselines is implemented
 - reusable point-in-time round-history indexing is implemented for repeated

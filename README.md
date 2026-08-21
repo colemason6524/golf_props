@@ -58,6 +58,10 @@ The project is now a runnable Python research prototype, not just docs:
 - a manifest-driven `predict-current-event` command now verifies frozen inputs,
   locks 365/8/20 parameters, classifies prospective eligibility, and writes a
   reproducible performance-only forecast bundle
+- the simulator supports an explicit `no_cut` event-structure rule in addition
+  to the ordinary `top_n_and_ties` cut, and prospective runs require a
+  timezone-aware `--event-start-at-utc` timestamp that is strictly before the
+  run's creation time (no post-tee-time backfilling)
 - a walk-forward simulator backtest compares performance probabilities with
   simple field-structure baselines
 - validation-only simulator parameter selection and a later untouched temporal
@@ -260,6 +264,20 @@ strictly after the manifest's prospective threshold. Historical engineering
 replays require `--allow-retrospective` and are permanently labeled
 `retrospective_replay`; they are not prospective evidence.
 
+Event structure is an explicit logged decision, separate from the frozen
+strength parameters:
+
+- `--cut-rule top_n_and_ties` (default) applies the frozen top-65-and-ties cut.
+- `--cut-rule no_cut` advances every active player; `make_cut_prob` becomes
+  structural (1.0) and is not an empirical target for such events.
+
+Prospective runs also require `--event-start-at-utc` with a timezone-aware
+timestamp (for example `2026-08-27T13:00:00Z`). The run is rejected if created
+at or after that timestamp, so a forecast cannot be backfilled after tee time.
+The output `run_manifest.json` records an `event_structure` object with the
+applied rule, whether a cut occurred, the frozen manifest cut size, and the
+effective advancing field size.
+
 Run an exploratory walk-forward evaluation with:
 
 ```bash
@@ -392,11 +410,13 @@ remains unchanged.
   equivalent identity.
 - Tee-wave, weather, withdrawal-risk, multi-course, and nonstandard event-format
   adjustments are not yet part of the simulation.
-- FedExCup Playoffs events (St. Jude, BMW, TOUR Championship) do not match the
-  ordinary top-65-and-ties cut assumption. Do not forecast them with a silent
-  full-field cut without an explicit logged event-structure decision.
+- FedExCup Playoffs events are no-cut. Explicit `no_cut` support exists so the
+  frozen simulator can represent them honestly (30-player TOUR Championship is
+  the next eligible prospective event: 72-hole stroke play, no cut, all players
+  at even par). St. Jude and BMW could not be forecast prospectively because
+  their windows closed before the no-cut path was available.
 - No genuinely prospective frozen forecast has been archived yet as of
-  2026-08-10. Wyndham 2026 was a retrospective engineering replay only.
+  2026-08-20. Wyndham 2026 was a retrospective engineering replay only.
 
 ## Core Question
 

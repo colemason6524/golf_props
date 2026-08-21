@@ -57,27 +57,40 @@ command verifies manifest input hashes, locks 365/8/20 parameters, enforces
 point-in-time and prospective eligibility, and writes a reproducible
 performance-only forecast bundle.
 
+The simulator now supports an explicit `no_cut` event-structure rule alongside
+the ordinary `top_n_and_ties` cut. Prospective runs additionally require a
+timezone-aware `--event-start-at-utc` timestamp that is strictly after the run's
+creation time, so a forecast cannot be backfilled after tee time. This is a
+structural adaptation; the frozen 365/8/20 strength parameters are unchanged.
+`make_cut_prob` is deterministic (1.0) under `no_cut` and is not an empirical
+target for such events.
+
 ## Exact Stopping Point
 
 No command or background process is currently running. Documentation was
-refreshed on 2026-08-10 for conversation handoff. The frozen current-event
-workflow is complete. A Wyndham Championship dry-run was archived as an
-explicitly labeled retrospective replay; it is not prospective evidence.
-
-As of 2026-08-10 evening local time:
+refreshed on 2026-08-20. The frozen current-event workflow now includes explicit
+no-cut event-structure support and a pre-start timestamp guard. As of
+2026-08-20:
 
 - no genuinely prospective frozen forecast has been archived yet;
-- the next PGA event after Wyndham is the FedEx St. Jude Championship
-  (competitive dates 2026-08-13 to 2026-08-16);
-- that event is a FedExCup Playoffs no-cut ~69-player field, which conflicts
-  with the simulator’s ordinary top-65-and-ties cut assumption;
-- frozen manifest parameters and incumbent strength settings remain unchanged.
+- FedEx St. Jude (2026-08-13) was missed because its window closed before the
+  no-cut path was available;
+- the BMW Championship (2026-08-20 to 2026-08-23) was in progress with Round 1
+  complete at this handoff, so it also cannot be forecast prospectively;
+- the next genuinely eligible event is the **2026 TOUR Championship** at East
+  Lake Golf Club (event window 2026-08-26 to 2026-08-30; competitive rounds
+  Thursday 2026-08-27 to Sunday 2026-08-30), a 30-player no-cut 72-hole
+  stroke-play event with all players starting at even par, which the frozen
+  simulator can represent with `--cut-rule no_cut`;
+- the official top-30 field is determined by FedExCup standings after BMW
+  concludes (2026-08-23) and cannot be preserved before then.
 
 The next queued task is:
 
-> Resolve the event-structure question for the first prospective forecast, then
-> archive an authoritative independent field and run the first genuinely
-> prospective frozen forecast for an event starting after 2026-08-06.
+> After BMW concludes, preserve the official top-30 TOUR Championship field,
+> resolve identities safely, verify the first-tee timestamp, and run the first
+> genuinely prospective frozen forecast with `--cut-rule no_cut` strictly before
+> the Thursday 2026-08-27 tee time.
 
 Preserve that forecast bundle unchanged for later grading. Keep sportsbook
 prices outside the performance computation, and do not use a retrospective
@@ -109,7 +122,7 @@ There are no commits. The unusual all-untracked state is expected. Do not run
 The latest verified test result at handoff refresh:
 
 ```text
-107 passed
+117 passed
 ```
 
 ## Project Principles and Non-Negotiable Rules
@@ -477,14 +490,16 @@ Do not cite those rows as evidence of value or betting edge.
 11. Current results stop before the model freeze date; no genuinely prospective
     tournament has yet been scored with the frozen manifest.
 12. No repository commit exists, so project history is not protected by Git.
-13. **Playoff event structure:** FedEx St. Jude / BMW / TOUR Championship do not
-    match the ordinary top-65-and-ties cut assumption. `predict-current-event`
-    currently locks `cut_size` from the frozen manifest and has no first-class
-    no-cut mode.
+13. **Playoff event structure:** FedEx St. Jude / BMW / TOUR Championship are
+    no-cut. `predict-current-event` now supports an explicit `--cut-rule`
+    (`top_n_and_ties` default or `no_cut`) without retuning strength. Under
+    `no_cut`, `make_cut_prob` is structural (1.0) and not an empirical target.
 14. Local canonical history may lag the market (`source_data_through=2026-07-11`),
     so late-July / early-August completed rounds may be missing from strength.
-15. The St. Jude prospective window closes at Thursday 2026-08-13 tee times; do
-    not backfill after the event starts.
+15. Prospective runs require `--event-start-at-utc` (timezone-aware, strictly
+    before run creation time), so the TOUR Championship forecast cannot be
+    backfilled after the first tee on Thursday 2026-08-27. The official field is
+    only final after BMW concludes on 2026-08-23.
 
 ## Completed Task: Course Identity Crosswalk
 
@@ -524,7 +539,13 @@ Implementation and evidence:
 7. runs the seeded joint-field simulator;
 8. writes `strengths.csv`, `predictions.csv`, `report.md`, and
    `run_manifest.json` with field, input, manifest, and artifact hashes;
-9. records that sportsbook prices and the course challenger were not used.
+9. records that sportsbook prices and the course challenger were not used;
+10. accepts an explicit `--cut-rule` (`top_n_and_ties` default or `no_cut`) and
+    logs an `event_structure` block (format, rounds, cut rule, whether a cut
+    occurred, frozen manifest cut size, effective advancing field) in the run
+    manifest and report;
+11. requires a timezone-aware `--event-start-at-utc` for prospective runs and
+    rejects runs created at or after that timestamp (`pre_start_verified`).
 
 ### Wyndham Championship 2026 dry-run
 
@@ -549,34 +570,39 @@ An engineering dry-run was then executed with `--allow-retrospective`:
 
 ## Exact Next Task: First Prospective Forecast
 
-### Immediate decision required before running St. Jude
+### Immediate decision required before running the TOUR Championship
 
-FedEx St. Jude Championship (2026-08-13 start) is date-eligible and is the
-calendar-next PGA event, but it is a **no-cut playoff event**. Do not run the
-frozen workflow with an ordinary top-65 cut and call that a valid prospective
-test.
+FedEx St. Jude (2026-08-13) and BMW (2026-08-20) are no longer prospectively
+eligible. The next genuinely eligible event is the 2026 TOUR Championship
+(competitive dates 2026-08-27 to 2026-08-30), a 30-player no-cut 72-hole
+stroke-play event at East Lake with all players starting at even par. The
+simulator now represents this honestly with `--cut-rule no_cut`; the frozen
+365/8/20 strength parameters are unchanged.
 
-Choose one explicit path and document it:
+The event-structure question is resolved in code:
 
-1. **Preferred if feasible before tee time:** add an explicit, logged event-
-   structure handling for no-cut / field-size cut without changing 365/8/20
-   strength parameters; then forecast St. Jude prospectively.
-2. **Honest alternative:** skip playoff no-cut / special-format events for the
-   first prospective series and wait for the next ordinary full-field cut
-   event after the playoffs.
-3. **Forbidden:** backdating a forecast after Thursday tee times, counting
-   Wyndham as prospective, or retuning strength parameters for one event.
+1. **Preferred path (implemented):** explicit, logged no-cut event-structure
+   handling without changing 365/8/20 strength parameters. `predict-current-event`
+   now accepts `--cut-rule no_cut` and a `--event-start-at-utc` guard. Run the
+   TOUR Championship prospectively with both.
+2. **Forbidden:** inventing a cut that does not exist, backdating a forecast
+   after the first tee, counting Wyndham as prospective, or retuning strength
+   parameters for one event.
 
-### Prospective protocol once event structure is honest
+### Prospective protocol once the field is final
 
-1. preserve an authoritative independent field CSV before the event starts
-   (official PGA Tour / FedExCup field preferred; Bovada only as cross-check);
-2. run `predict-current-event` without `--allow-retrospective`;
-3. resolve unsafe field identities rather than bypassing them;
-4. archive the complete output bundle unchanged;
-5. after the event, grade the frozen probabilities without retuning;
-6. repeat across multiple events to evaluate prospective calibration and
-   stability.
+1. After BMW concludes (2026-08-23), preserve the official PGA Tour / FedExCup
+   top-30 TOUR Championship field CSV before the event starts (official source
+   preferred; Bovada only as cross-check);
+2. resolve unsafe field identities rather than bypassing them;
+3. confirm the first-tee UTC timestamp once tee times are posted;
+4. run `predict-current-event --cut-rule no_cut --event-start-at-utc <verified>`
+   without `--allow-retrospective`;
+5. archive the complete output bundle unchanged;
+6. after the event, grade the frozen top-20/top-10/top-5/winner probabilities
+   without retuning (`make_cut` is structural under no-cut and must not be a
+   substantive target);
+7. repeat across future events.
 
 Bovada timestamp collection may continue in parallel. Odds stay outside the
 performance model and must not block this loop.
@@ -766,6 +792,10 @@ local machine rather than inferred from repository status.
 - 365/8/20 round-strength incumbent.
 - Joint-field seeded simulation.
 - Hash-verified, manifest-driven current-event forecasts.
+- Explicit, logged no-cut / field-size event-structure support separate from
+  frozen strength parameters.
+- Pre-start timestamp verification so prospective forecasts cannot be backfilled
+  after tee time.
 - Rolling-origin selection and evaluation.
 - Tournament-level paired bootstrap.
 - Reviewed and auditable cross-source course identity.
@@ -798,9 +828,13 @@ local machine rather than inferred from repository status.
 4. Run `PYTHONPATH=src python3 -m pytest`.
 5. Inspect the frozen manifests and confirm generated data still exists.
 6. Resolve the playoff no-cut / event-structure question before forecasting
-   St. Jude or BMW.
+   playoff events. Explicit `--cut-rule no_cut` support is now implemented;
+   strength parameters are unchanged.
 7. Start the first genuinely prospective frozen forecast only under honest
-   event-structure assumptions unless the user explicitly changes direction.
+   event-structure assumptions and only strictly before the first tee. The
+   next eligible event is the 2026 TOUR Championship (competitive rounds
+   2026-08-27 to 2026-08-30); its official field is final only after BMW
+   concludes on 2026-08-23.
 8. Update this handoff, the research narrative, and the continuation prompt
    whenever a decision, experiment, source status, frozen parameter, cutoff, or
    next task changes.
