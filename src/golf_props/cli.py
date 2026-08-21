@@ -23,12 +23,23 @@ from golf_props.backtest.rolling_simulation_validation import (
 from golf_props.backtest.course_challenger_validation import (
     run_course_challenger_validation,
 )
+from golf_props.backtest.forecast_archive import (
+    ForecastArchiveError,
+    verify_forecast_archive,
+)
 from golf_props.backtest.value_report import build_value_report
 from golf_props.config import PROJECT_ROOT, project_paths
 from golf_props.features.current_event import build_current_event_features
 from golf_props.features.player_event import build_features
 from golf_props.features.round_performance import build_round_performance
 from golf_props.ingestion.cbs_results import collect_cbs_results
+from golf_props.ingestion.current_field import (
+    FINALITY_FINAL,
+    SOURCE_KIND_CROSS_CHECK,
+    SOURCE_KIND_OFFICIAL,
+    import_field_evidence,
+)
+from golf_props.ingestion.tee_times import import_tee_time_evidence
 from golf_props.normalization.cbs_results import normalize_directory as normalize_cbs_directory
 from golf_props.normalization.course_identity import audit_course_aliases
 from golf_props.normalization.merge_results import merge_directories
@@ -62,6 +73,11 @@ from golf_props.pipelines.dk_current_value import run_dk_current_value
 from golf_props.pipelines.current_event_simulation import (
     FrozenCurrentEventError,
     run_frozen_current_event,
+)
+from golf_props.pipelines.weekly_forecast import (
+    WeeklyPaths,
+    weekly_forecast,
+    weekly_forecast_status,
 )
 
 
@@ -227,6 +243,69 @@ def build_parser() -> argparse.ArgumentParser:
         default=CUT_RULE_TOP_N_AND_TIES,
     )
     frozen_current_parser.add_argument("--event-start-at-utc")
+
+    weekly_parser = subparsers.add_parser(
+        "weekly-forecast",
+        help="Discover the next event, collect evidence, and archive the frozen forecast.",
+    )
+    weekly_parser.add_argument("--dry-run", action="store_true")
+    weekly_parser.add_argument(
+        "--forecast-due-hours-before",
+        type=int,
+        default=12,
+    )
+    weekly_parser.add_argument("--simulations", type=int, default=20000)
+    weekly_parser.add_argument("--top-n", type=int, default=25)
+    weekly_parser.add_argument(
+        "--schedule-url",
+        default="https://www.cbssports.com/golf/schedules/2026/",
+    )
+
+    weekly_status_parser = subparsers.add_parser(
+        "weekly-forecast-status",
+        help="Print the latest weekly-forecast status file.",
+    )
+
+    verify_archive_parser = subparsers.add_parser(
+        "verify-forecast-archive",
+        help="Verify a prospective forecast archive hash manifest.",
+    )
+    verify_archive_parser.add_argument("--archive-dir", required=True, type=Path)
+
+    import_field_parser = subparsers.add_parser(
+        "import-current-field-evidence",
+        help="Preserve reviewed official field evidence for an event.",
+    )
+    import_field_parser.add_argument("--event-key", required=True)
+    import_field_parser.add_argument("--event-name", required=True)
+    import_field_parser.add_argument("--payload", required=True, type=Path)
+    import_field_parser.add_argument(
+        "--source-kind",
+        choices=[SOURCE_KIND_OFFICIAL, SOURCE_KIND_CROSS_CHECK],
+        default=SOURCE_KIND_OFFICIAL,
+    )
+    import_field_parser.add_argument("--org", required=True)
+    import_field_parser.add_argument("--url", required=True)
+    import_field_parser.add_argument("--captured-at-utc", required=True)
+    import_field_parser.add_argument(
+        "--finality",
+        choices=["final", "preliminary", "unknown"],
+        default=FINALITY_FINAL,
+    )
+    import_field_parser.add_argument("--expected-field-size", type=int)
+
+    import_tee_parser = subparsers.add_parser(
+        "import-current-tee-time-evidence",
+        help="Preserve reviewed tee-time evidence and derive the first tee UTC.",
+    )
+    import_tee_parser.add_argument("--event-key", required=True)
+    import_tee_parser.add_argument("--event-name", required=True)
+    import_tee_parser.add_argument("--payload", required=True, type=Path)
+    import_tee_parser.add_argument("--org", required=True)
+    import_tee_parser.add_argument("--url", required=True)
+    import_tee_parser.add_argument("--captured-at-utc", required=True)
+    import_tee_parser.add_argument("--local-timezone", required=True)
+    import_tee_parser.add_argument("--reviewed-by", required=True)
 
     simulation_backtest_parser = subparsers.add_parser(
         "simulation-backtest",
@@ -858,6 +937,68 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"frozen_current_predictions={result['predictions_path']}")
         print(f"frozen_current_report={result['report_path']}")
         print(f"frozen_current_manifest={result['run_manifest_path']}")
+        return 0
+    if args.command == "weekly-forecast":
+        exit_code, status = weekly_forecast(
+            WeeklyPaths(),
+            dry_run=args.dry_run,
+            forecast_due_hours_before=args.forecast_due_hours_before,
+            schedule_url=args.schedule_url,
+            simulations=args.simulations,
+            top_n=args.top_n,
+        )
+        print(f"weekly_forecast_exit={exit_code}")
+        print(f"weekly_forecast_state={status.get('state')}")
+        print(f"weekly_forecast_event={status.get('event_name')}")
+        print(f"weekly_forecast_reason={status.get('blocking_reason')}")
+        return exit_code
+    if args.command == "weekly-forecast-status":
+        status = weekly_forecast_status(WeeklyPaths())
+        import json as _json
+
+        print(_json.dumps(status, indent=2, sort_keys=True))
+        return 0
+    if args.command == "verify-forecast-archive":
+        try:
+            result = verify_forecast_archive(args.archive_dir)
+        except ForecastArchiveError as exc:
+            print(f"Forecast archive verification failed: {exc}", file=sys.stderr)
+            return 1
+        print(f"archive_verified={result['verified']}")
+        print(f"archive_dir={result['archive_dir']}")
+        for problem in result["problems"]:
+            print(f"archive_problem={problem}")
+        return 0 if result["verified"] else 1
+    if args.command == "import-current-field-evidence":
+        evidence = import_field_evidence(
+            args.event_key,
+            args.payload,
+            source_kind=args.source_kind,
+            org=args.org,
+            url=args.url,
+            captured_at_utc=args.captured_at_utc,
+            finality=args.finality,
+            event_name=args.event_name,
+            expected_field_size=args.expected_field_size,
+        )
+        print(f"field_evidence_payload={evidence.payload_path}")
+        print(f"field_evidence_rows={len(evidence.rows)}")
+        print(f"field_evidence_ready={evidence.ready()}")
+        return 0
+    if args.command == "import-current-tee-time-evidence":
+        evidence = import_tee_time_evidence(
+            args.event_key,
+            args.event_name,
+            args.payload,
+            org=args.org,
+            url=args.url,
+            captured_at_utc=args.captured_at_utc,
+            local_timezone=args.local_timezone,
+            reviewed_by=args.reviewed_by,
+        )
+        print(f"tee_evidence_payload={evidence.payload_path}")
+        print(f"tee_evidence_rows={len(evidence.rows)}")
+        print(f"tee_earliest_at_utc={evidence.earliest_tee_at_utc}")
         return 0
     if args.command == "simulation-backtest":
         result = run_simulation_backtest(

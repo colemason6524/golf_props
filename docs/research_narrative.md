@@ -137,6 +137,24 @@ Championship (competitive rounds 2026-08-27 to 2026-08-30), a 30-player no-cut
 72-hole stroke-play event at East Lake with all players at even par. Its
 official top-30 field is only final after BMW concludes on 2026-08-23.
 
+### Phase I — Weekly forecast automation
+
+The manual weekly loop was turned into a generic, idempotent, fail-closed
+pipeline (`weekly-forecast`) so the TOUR Championship and every future event
+follow the same discipline: discover from a preserved schedule (CBS is discovery
+only), wait for reviewed **official** field and tee-time evidence, resolve
+identities via reviewed aliases, run the frozen forecast at T-12 hours into a
+staged directory, hash everything into an `archive_manifest.json`, and atomically
+promote an immutable bundle. It blocks rather than guesses: unreviewed events,
+sportsbook field sources, ambiguous/unmatched names, and missing tee times all
+stop the loop with distinct exit codes. A live dry run on 2026-08-21 correctly
+selected the TOUR Championship (skipping the in-progress BMW and the excluded
+Presidents Cup) and waited for the field.
+
+Deliberate boundary: the weekly loop does **not** refresh historical performance.
+The frozen manifest's hashed inputs remain authoritative; an append-only refresh
+is a separate scientific decision, not an operational one.
+
 ## Current Theory
 
 The working theory of the game, as of 2026-08-10:

@@ -278,6 +278,33 @@ The output `run_manifest.json` records an `event_structure` object with the
 applied rule, whether a cut occurred, the frozen manifest cut size, and the
 effective advancing field size.
 
+## Weekly automation
+
+A generic, idempotent, fail-closed loop (`weekly-forecast`) discovers the next
+main PGA Tour event, waits for reviewed official field and tee-time evidence,
+resolves player identities, and archives one immutable frozen forecast before
+the verified first tee:
+
+```bash
+PYTHONPATH=src python3 -m golf_props.cli weekly-forecast            # run the loop
+PYTHONPATH=src python3 -m golf_props.cli weekly-forecast --dry-run   # never archives
+PYTHONPATH=src python3 -m golf_props.cli weekly-forecast-status      # why is it waiting?
+PYTHONPATH=src python3 -m golf_props.cli verify-forecast-archive \
+  --archive-dir data/interim/reports/prospective_forecasts/<event_key>
+```
+
+- Source policy: the CBS schedule is discovery only; event timing and structure
+  come from reviewed evidence (`config/event_registry.csv`, field/tee-time
+  evidence manifests). Sportsbook sources are cross-checks only and never
+  authorize the performance-model field.
+- Timing: earliest Round 1 tee is derived in UTC from reviewed evidence; the
+  forecast runs at T-12 hours, never after the first tee, and never overwrites
+  an archived forecast.
+- Identity: `config/player_aliases.csv` holds reviewed name variants; ambiguous,
+  unknown, or unmatched players block the forecast.
+- Exit codes: 0 waiting/archived, 10 blocked, 11 deadline missed, 12 identity
+  blocked, 20 hard error. State lives in `data/interim/weekly/status.json`.
+
 Run an exploratory walk-forward evaluation with:
 
 ```bash

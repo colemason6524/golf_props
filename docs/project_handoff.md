@@ -103,7 +103,7 @@ As of 2026-08-21 the repository has its first commits pushed to a remote:
 
 ```text
 origin  https://github.com/colemason6524/golf_props.git (fetch/push)
-main    origin/main  (5 commits, no force pushes)
+main    origin/main  (9 commits, no force pushes)
 ```
 
 Commits in order:
@@ -113,13 +113,17 @@ Commits in order:
 3. `Add explicit no-cut event-structure support and pre-start timestamp guard`
 4. `Refresh docs for 2026-08-20 handoff (no-cut support, TOUR Championship next eligible)`
 5. `Track logs directory scaffold so fresh clones pass scaffold checks`
+6. `Add Windows Task Scheduler deployment (Bovada collect + staged TOUR Championship forecast)`
+7. `Ignore generated task logs on Windows`
+8. `Ignore editable-install egg-info artifacts`
+9. `Add weekly frozen forecast automation (discovery, evidence, identity, archive)`
 
 The repo is mirrored to the Windows Task Scheduler host at
 `C:\Users\muski\golf_props` (see `docs/windows_deployment.md`). Windows runs
-the same 117-test suite and has the frozen manifest, canonical history, and
-round-performance features with verified identical hashes. Bovada snapshot
-collection and the staged one-shot TOUR Championship forecast run as Windows
-Task Scheduler tasks.
+the same test suite and has the frozen manifest, canonical history, and
+round-performance features with verified identical hashes. A generic recurring
+`GolfWeeklyForecast` task runs every two hours; the one-shot TOUR Championship
+task remains as a fallback.
 
 Large generated/research data under `data/raw`, `data/processed`, and
 `data/interim` is intentionally ignored by `.gitignore`, but it is essential
@@ -130,7 +134,7 @@ not `git clean`, reset, delete, or revert files.
 The latest verified test result at handoff refresh:
 
 ```text
-117 passed
+165 passed
 ```
 
 ## Project Principles and Non-Negotiable Rules
@@ -576,6 +580,54 @@ An engineering dry-run was then executed with `--allow-retrospective`:
   Fitzpatrick, Justin Thomas, and Maverick McNealy
 - this bundle is not prospective evidence and must not be graded as such
 
+## Completed Task: Weekly Forecast Automation
+
+The manual weekly loop (discover event, preserve field, tee times, identity,
+archive) is now a generic, idempotent, fail-closed pipeline:
+
+- `src/golf_props/events/event_control.py` — versioned event record and state
+  machine (`discovered -> awaiting_field -> awaiting_tee_times ->
+  awaiting_identity_resolution -> forecast_ready -> forecast_archived`, plus
+  `blocked` and `deadline_missed`; archived/missed are terminal).
+- `src/golf_props/ingestion/current_event_discovery.py` — preserves the raw CBS
+  schedule and selects the next not-yet-started event; CBS is discovery only and
+  never supplies timing or structure.
+- `src/golf_props/ingestion/current_field.py` — reviewed **official** field
+  evidence (source_kind `official` + finality `final`) unlocks the forecast;
+  sportsbook sources are cross-check diagnostics only.
+- `src/golf_props/ingestion/tee_times.py` — reviewed tee-time evidence with an
+  explicit IANA local timezone derives the earliest Round 1 tee in UTC.
+- `src/golf_props/events/structure.py` + `config/event_registry.csv` — reviewed
+  per-season scope and event-structure decisions; an event with no reviewed row
+  is never selected (fails closed).
+- `src/golf_props/normalization/player_identity.py` + `config/player_aliases.csv`
+  — reviewed identity resolution (compact-name matching, reviewed aliases,
+  ID/name consistency); ambiguous/unknown/unmatched names block.
+- `src/golf_props/pipelines/weekly_forecast.py` — orchestrator: runs the frozen
+  365/8/20 forecast into a staging directory, copies all evidence, writes an
+  `archive_manifest.json` hash index, and atomically promotes to
+  `data/interim/reports/prospective_forecasts/<event_key>/`. Refuses overwrite,
+  runs at T-12 hours, and never backfills.
+- `src/golf_props/backtest/forecast_archive.py` — archive hash verification.
+- CLI: `weekly-forecast`, `weekly-forecast-status`, `verify-forecast-archive`,
+  `import-current-field-evidence`, `import-current-tee-time-evidence`.
+
+Exit codes: 0 waiting/archived, 10 blocked, 11 deadline missed, 12 identity
+blocked, 20 hard error. State lives in `data/interim/weekly/` (`status.json`,
+`current_event_key.txt`, `<event_key>/event_control.json`).
+
+Live validation (2026-08-21 dry run, no forecast): the pipeline fetched the real
+CBS schedule, correctly selected the 2026 TOUR Championship (skipping the
+in-progress BMW and the excluded Presidents Cup), recorded `no_cut` from the
+reviewed registry, and is now in `awaiting_field` (honest: the official top-30
+field is final only after BMW concludes 2026-08-23).
+
+Frozen-input policy: the weekly pipeline does **not** refresh historical
+performance. It continues to use the frozen manifest's hashed inputs
+(`source_data_through=2026-07-11`). Any append-only historical refresh is a
+separate scientific decision that must not be slipped into operational
+automation.
+
 ## Exact Next Task: First Prospective Forecast
 
 ### Immediate decision required before running the TOUR Championship
@@ -599,18 +651,24 @@ The event-structure question is resolved in code:
 
 ### Prospective protocol once the field is final
 
+The weekly loop automates steps 2-6 below, but it still requires reviewed
+operator evidence for the authoritative field and tee times:
+
 1. After BMW concludes (2026-08-23), preserve the official PGA Tour / FedExCup
-   top-30 TOUR Championship field CSV before the event starts (official source
-   preferred; Bovada only as cross-check);
-2. resolve unsafe field identities rather than bypassing them;
-3. confirm the first-tee UTC timestamp once tee times are posted;
-4. run `predict-current-event --cut-rule no_cut --event-start-at-utc <verified>`
-   without `--allow-retrospective`;
-5. archive the complete output bundle unchanged;
-6. after the event, grade the frozen top-20/top-10/top-5/winner probabilities
+   top-30 TOUR Championship field as reviewed **official** evidence
+   (`import-current-field-evidence --source-kind official --finality final`).
+2. Once tee times are posted, preserve them as reviewed evidence with the event
+   local timezone (`import-current-tee-time-evidence --local-timezone ...`).
+3. The `GolfWeeklyForecast` task (or `weekly-forecast` locally) resolves
+   identities, runs `predict-current-event --cut-rule no_cut` at T-12 hours,
+   and archives the immutable bundle with all evidence hashed.
+4. Verify the archive (`verify-forecast-archive`).
+5. After the event, grade the frozen top-20/top-10/top-5/winner probabilities
    without retuning (`make_cut` is structural under no-cut and must not be a
-   substantive target);
-7. repeat across future events.
+   substantive target).
+6. Add the next reviewed event to `config/event_registry.csv` so the loop can
+   select the following week's tournament.
+7. Repeat across future events.
 
 Bovada timestamp collection may continue in parallel. Odds stay outside the
 performance model and must not block this loop.
@@ -843,12 +901,12 @@ local machine rather than inferred from repository status.
 6. Resolve the playoff no-cut / event-structure question before forecasting
    playoff events. Explicit `--cut-rule no_cut` support is now implemented;
    strength parameters are unchanged.
-7. Start the first genuinely prospective frozen forecast only under honest
-   event-structure assumptions and only strictly before the first tee. The
-   next eligible event is the 2026 TOUR Championship (competitive rounds
-   2026-08-27 to 2026-08-30); its official field is final only after BMW
-   concludes on 2026-08-23. The Windows scheduled forecast task only executes
-   once that field is preserved (see `docs/windows_deployment.md`).
+7. The generic `weekly-forecast` loop is live and fail-closed. It waits for
+   reviewed official field/tee-time evidence, so the operator must preserve
+   that evidence after BMW concludes (2026-08-23) and after tee times post. Add
+   each next event to `config/event_registry.csv` and unresolved names to
+   `config/player_aliases.csv`; the pipeline blocks rather than guessing. Run
+   `weekly-forecast-status` to see why it is waiting.
 8. Update this handoff, the research narrative, and the continuation prompt
    whenever a decision, experiment, source status, frozen parameter, cutoff, or
    next task changes.

@@ -338,6 +338,10 @@ def run_frozen_current_event(
             raise FrozenCurrentEventError(
                 "event_start_at_utc must be timezone-aware"
             )
+        if start_at.date() != parse_iso_date(event_date, "event_date"):
+            raise FrozenCurrentEventError(
+                "event_start_at_utc date must match event_date"
+            )
         if created_at >= start_at:
             raise FrozenCurrentEventError(
                 "forecast creation time is not strictly before the event start"
@@ -380,9 +384,17 @@ def run_frozen_current_event(
         cut_rule=cut_rule,
     )
 
+    completed_at = utc_now()
+    if eligibility_row["is_prospective"] and start_at is not None:
+        if completed_at >= start_at:
+            raise FrozenCurrentEventError(
+                "forecast completion would not be strictly before the event start"
+            )
+
     run_metadata: dict[str, object] = {
         "run_manifest_version": 2,
         "created_at_utc": created_at.isoformat(),
+        "completed_at_utc": completed_at.isoformat(),
         "status": "completed_performance_only",
         "event_name": event_name.strip(),
         "eligibility": eligibility_row,
@@ -434,6 +446,10 @@ def run_frozen_current_event(
     predictions_path = output_dir / "predictions.csv"
     report_path = output_dir / "report.md"
     run_manifest_path = output_dir / "run_manifest.json"
+    if run_manifest_path.exists():
+        raise FrozenCurrentEventError(
+            f"refusing to overwrite an existing forecast bundle: {run_manifest_path}"
+        )
     write_strength_csv(strengths_path, strength_rows)
     write_simulation_csv(predictions_path, simulation_rows)
     report_path.write_text(

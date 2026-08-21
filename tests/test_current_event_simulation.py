@@ -339,6 +339,63 @@ def test_frozen_prospective_rejects_run_at_or_after_start(tmp_path, monkeypatch)
         )
 
 
+def test_frozen_refuses_overwrite_existing_bundle(tmp_path, monkeypatch):
+    _, _, field, manifest = prepare_frozen_inputs(tmp_path)
+    freeze_clock(monkeypatch, "2025-04-28T00:00:00Z")
+    output = tmp_path / "bundle"
+    run_frozen_current_event(
+        manifest,
+        field,
+        output,
+        "Future Event",
+        "2025-05-01",
+        simulations=20,
+        event_start_at_utc=START,
+    )
+    with pytest.raises(FrozenCurrentEventError, match="refusing to overwrite"):
+        run_frozen_current_event(
+            manifest,
+            field,
+            output,
+            "Future Event",
+            "2025-05-01",
+            simulations=20,
+            event_start_at_utc=START,
+        )
+
+
+def test_frozen_rejects_start_date_mismatch(tmp_path, monkeypatch):
+    _, _, field, manifest = prepare_frozen_inputs(tmp_path)
+    freeze_clock(monkeypatch, "2025-04-28T00:00:00Z")
+
+    with pytest.raises(FrozenCurrentEventError, match="must match event_date"):
+        run_frozen_current_event(
+            manifest,
+            field,
+            tmp_path / "mismatch",
+            "Future Event",
+            "2025-05-01",
+            simulations=20,
+            event_start_at_utc="2025-05-02T13:00:00Z",
+        )
+
+
+def test_frozen_records_completed_at_utc(tmp_path, monkeypatch):
+    _, _, field, manifest = prepare_frozen_inputs(tmp_path)
+    freeze_clock(monkeypatch, "2025-04-28T00:00:00Z")
+    result = run_frozen_current_event(
+        manifest,
+        field,
+        tmp_path / "completed",
+        "Future Event",
+        "2025-05-01",
+        simulations=20,
+        event_start_at_utc=START,
+    )
+    assert result["run_manifest"]["completed_at_utc"] == "2025-04-28T00:00:00+00:00"
+
+
+
 def test_frozen_no_cut_advances_everyone_and_keeps_frozen_manifest(
     tmp_path, monkeypatch
 ):
