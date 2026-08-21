@@ -17,10 +17,17 @@ from golf_props.models.round_strength import (
     write_csv as write_strength_csv,
 )
 from golf_props.models.tournament_simulator import (
+    CUT_RULE_NO_CUT,
+    CUT_RULE_TOP_N_AND_TIES,
+    SUPPORTED_CUT_RULES,
     render_report as render_simulation_report,
     simulate_tournament_rows,
     write_csv as write_simulation_csv,
 )
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class FrozenCurrentEventError(ValueError):
@@ -128,6 +135,14 @@ def parse_iso_date(value: str, label: str) -> date:
         raise FrozenCurrentEventError(f"{label} must be an ISO date") from exc
 
 
+def parse_iso_datetime(value: str, label: str) -> datetime:
+    try:
+        normalized = str(value).replace("Z", "+00:00")
+        return datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise FrozenCurrentEventError(f"{label} must be an ISO timestamp") from exc
+
+
 def eligibility(
     event_date: str,
     as_of_date: str,
@@ -211,9 +226,11 @@ def render_report(
     eligibility_row = run_metadata["eligibility"]
     field_quality = run_metadata["field_quality"]
     frozen = run_metadata["frozen_parameters"]
+    event_structure = run_metadata["event_structure"]
     assert isinstance(eligibility_row, dict)
     assert isinstance(field_quality, dict)
     assert isinstance(frozen, dict)
+    assert isinstance(event_structure, dict)
     lines = [
         "# Frozen Current-Event Forecast",
         "",
@@ -228,14 +245,23 @@ def render_report(
         f"- prospective after: {eligibility_row['prospective_holdout_after']}",
         f"- source data through: {frozen['source_data_through']}",
         f"- frozen manifest created: {run_metadata['frozen_manifest_created_at_utc']}",
+        f"- created at (utc): {run_metadata['created_at_utc']}",
         f"- field quality: {field_quality['quality_status']}",
+        "",
+        "## Event Structure",
+        "",
+        f"- format: {event_structure['format']}",
+        f"- rounds: {event_structure['rounds']}",
+        f"- applied cut rule: {event_structure['cut_rule']}",
+        f"- cut applied: {event_structure['cut_applied']}",
+        f"- frozen manifest cut size: {event_structure['frozen_manifest_cut_size']}",
+        f"- effective advancing field: {event_structure['effective_advancing_size']}",
         "",
         "## Frozen Parameters",
         "",
         f"- half-life days: {frozen['half_life_days']}",
         f"- mean prior rounds: {frozen['prior_rounds']}",
         f"- variance prior rounds: {frozen['variance_prior_rounds']}",
-        f"- cut size: {run_metadata['cut_size']}",
         f"- simulations: {run_metadata['simulations']}",
         f"- seed: {run_metadata['seed']}",
         "",
@@ -274,6 +300,8 @@ def run_frozen_current_event(
     seed: Optional[int] = None,
     top_n: int = 25,
     allow_retrospective: bool = False,
+    cut_rule: str = CUT_RULE_TOP_N_AND_TIES,
+    event_start_at_utc: Optional[str] = None,
 ) -> dict[str, object]:
     if not event_name.strip():
         raise FrozenCurrentEventError("event_name cannot be blank")
@@ -281,6 +309,8 @@ def run_frozen_current_event(
         raise FrozenCurrentEventError("simulations must be positive")
     if top_n <= 0:
         raise FrozenCurrentEventError("top_n must be positive")
+    if cut_rule not in SUPPORTED_CUT_RULES:
+        raise FrozenCurrentEventError(f"unsupported cut_rule: {cut_rule}")
 
     manifest = read_json(manifest_path)
     frozen = frozen_configuration(manifest)
@@ -295,6 +325,34 @@ def run_frozen_current_event(
         str(frozen["prospective_holdout_after"]),
         allow_retrospective,
     )
+
+    created_at = utc_now()
+    start_at: Optional[datetime] = None
+    if eligibility_row["is_prospective"]:
+        if not event_start_at_utc:
+            raise FrozenCurrentEventError(
+                "event_start_at_utc is required for prospective runs"
+            )
+        start_at = parse_iso_datetime(event_start_at_utc, "event_start_at_utc")
+        if start_at.tzinfo is None or start_at.utcoffset() is None:
+            raise FrozenCurrentEventError(
+                "event_start_at_utc must be timezone-aware"
+            )
+        if created_at >= start_at:
+            raise FrozenCurrentEventError(
+                "forecast creation time is not strictly before the event start"
+            )
+        pre_start_verified = True
+    else:
+        pre_start_verified = False
+        if event_start_at_utc:
+            start_at = parse_iso_datetime(
+                event_start_at_utc, "event_start_at_utc"
+            )
+            if start_at.tzinfo is None or start_at.utcoffset() is None:
+                raise FrozenCurrentEventError(
+                    "event_start_at_utc must be timezone-aware"
+                )
 
     field_rows = read_strength_csv(field_path)
     validate_field_columns(field_path, field_rows)
@@ -319,11 +377,12 @@ def run_frozen_current_event(
         simulations=simulations,
         seed=selected_seed,
         cut_size=cut_size,
+        cut_rule=cut_rule,
     )
 
     run_metadata: dict[str, object] = {
-        "run_manifest_version": 1,
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "run_manifest_version": 2,
+        "created_at_utc": created_at.isoformat(),
         "status": "completed_performance_only",
         "event_name": event_name.strip(),
         "eligibility": eligibility_row,
@@ -341,6 +400,18 @@ def run_frozen_current_event(
             "selection_date_from": str(frozen.get("selection_date_from") or ""),
             "selection_date_to": str(frozen.get("selection_date_to") or ""),
         },
+        "event_structure": {
+            "format": "72_hole_stroke_play",
+            "rounds": int(simulation_summary["rounds"]),
+            "cut_rule": cut_rule,
+            "cut_applied": bool(simulation_summary["cut_applied"]),
+            "frozen_manifest_cut_size": cut_size,
+            "effective_advancing_size": int(simulation_summary["cut_size"]),
+        },
+        "pre_start_verified": pre_start_verified,
+        "event_start_at_utc": (
+            start_at.isoformat() if start_at is not None else None
+        ),
         "canonical_dir": str(canonical_dir),
         "round_performance_path": str(round_performance_path),
         "verified_input_sha256": verified_hashes,

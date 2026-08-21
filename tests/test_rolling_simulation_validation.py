@@ -135,6 +135,7 @@ def test_rolling_validation_writes_manifest_and_outputs(tmp_path):
     assert list(folds[0]) == FOLD_COLUMNS
     assert len(result["folds"]) == 1
     assert manifest["status"] == "frozen_awaiting_future_evaluation"
+    assert manifest["cut_size"] == 2
     assert manifest["frozen_model"]["source_data_through"] == "2025-03-16"
     assert (
         manifest["frozen_model"]["prospective_holdout_after"]

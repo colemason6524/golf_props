@@ -36,7 +36,11 @@ from golf_props.normalization.manual_odds import normalize_file as normalize_man
 from golf_props.normalization.espn_results import normalize_file as normalize_espn_file
 from golf_props.models.time_split_baseline import run_time_split_baseline
 from golf_props.models.round_strength import build_round_strength_snapshot
-from golf_props.models.tournament_simulator import run_tournament_simulation
+from golf_props.models.tournament_simulator import (
+    CUT_RULE_TOP_N_AND_TIES,
+    SUPPORTED_CUT_RULES,
+    run_tournament_simulation,
+)
 from golf_props.normalization.bootstrap_results import normalize_file
 from golf_props.odds.draftkings_predictions import (
     DEFAULT_URL as DK_PREDICTIONS_URL,
@@ -196,6 +200,11 @@ def build_parser() -> argparse.ArgumentParser:
     simulation_parser.add_argument("--simulations", type=int, default=20000)
     simulation_parser.add_argument("--seed", type=int, default=20260729)
     simulation_parser.add_argument("--cut-size", type=int, default=65)
+    simulation_parser.add_argument(
+        "--cut-rule",
+        choices=sorted(SUPPORTED_CUT_RULES),
+        default=CUT_RULE_TOP_N_AND_TIES,
+    )
     simulation_parser.add_argument("--top-n", type=int, default=25)
 
     frozen_current_parser = subparsers.add_parser(
@@ -212,6 +221,12 @@ def build_parser() -> argparse.ArgumentParser:
     frozen_current_parser.add_argument("--seed", type=int)
     frozen_current_parser.add_argument("--top-n", type=int, default=25)
     frozen_current_parser.add_argument("--allow-retrospective", action="store_true")
+    frozen_current_parser.add_argument(
+        "--cut-rule",
+        choices=sorted(SUPPORTED_CUT_RULES),
+        default=CUT_RULE_TOP_N_AND_TIES,
+    )
+    frozen_current_parser.add_argument("--event-start-at-utc")
 
     simulation_backtest_parser = subparsers.add_parser(
         "simulation-backtest",
@@ -813,6 +828,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             simulations=args.simulations,
             seed=args.seed,
             cut_size=args.cut_size,
+            cut_rule=args.cut_rule,
             top_n=args.top_n,
         )
         print(f"simulation_predictions={result['predictions_path']}")
@@ -832,6 +848,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 seed=args.seed,
                 top_n=args.top_n,
                 allow_retrospective=args.allow_retrospective,
+                cut_rule=args.cut_rule,
+                event_start_at_utc=args.event_start_at_utc,
             )
         except FrozenCurrentEventError as exc:
             print(f"Frozen current-event forecast failed: {exc}", file=sys.stderr)

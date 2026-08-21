@@ -31,6 +31,10 @@ SIMULATION_COLUMNS = [
 
 INACTIVE_ENTRY_STATUSES = {"withdrawn", "wd", "out", "inactive"}
 
+CUT_RULE_TOP_N_AND_TIES = "top_n_and_ties"
+CUT_RULE_NO_CUT = "no_cut"
+SUPPORTED_CUT_RULES = {CUT_RULE_TOP_N_AND_TIES, CUT_RULE_NO_CUT}
+
 
 class TournamentSimulationError(ValueError):
     """Raised when a tournament field cannot be simulated."""
@@ -84,12 +88,19 @@ def simulate_tournament_rows(
     simulations: int = 20000,
     seed: int = 20260729,
     cut_size: int = 65,
+    cut_rule: str = CUT_RULE_TOP_N_AND_TIES,
     rounds: int = 4,
     cut_after_round: int = 2,
     batch_size: int = 2000,
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
     if simulations <= 0:
         raise TournamentSimulationError("simulations must be positive")
+    if cut_rule not in SUPPORTED_CUT_RULES:
+        raise TournamentSimulationError(f"unsupported cut_rule: {cut_rule}")
+    if cut_rule == CUT_RULE_TOP_N_AND_TIES and cut_size < 1:
+        raise TournamentSimulationError(
+            "cut_size must be positive for top_n_and_ties"
+        )
     if rounds < 2 or not 0 < cut_after_round < rounds:
         raise TournamentSimulationError("invalid round/cut configuration")
     active_rows, excluded_rows = active_strength_rows(strength_rows)
@@ -114,7 +125,11 @@ def simulate_tournament_rows(
 
     rng = np.random.default_rng(seed)
     player_count = len(active_rows)
-    effective_cut_size = min(max(cut_size, 1), player_count)
+    if cut_rule == CUT_RULE_TOP_N_AND_TIES:
+        effective_cut_size = min(cut_size, player_count)
+    else:
+        effective_cut_size = player_count
+    cut_applied = cut_rule == CUT_RULE_TOP_N_AND_TIES
     make_cut_counts = np.zeros(player_count, dtype=np.int64)
     placement_counts = {
         20: np.zeros(player_count, dtype=np.int64),
@@ -137,12 +152,15 @@ def simulate_tournament_rows(
         # preserving relative rankings. Absolute course scoring is not claimed.
         scores = np.rint(72.0 - performances).astype(np.int16)
         two_round_scores = scores[:, :, :cut_after_round].sum(axis=2)
-        cut_thresholds = np.partition(
-            two_round_scores,
-            effective_cut_size - 1,
-            axis=1,
-        )[:, effective_cut_size - 1]
-        made_cut = two_round_scores <= cut_thresholds[:, None]
+        if cut_rule == CUT_RULE_TOP_N_AND_TIES:
+            cut_thresholds = np.partition(
+                two_round_scores,
+                effective_cut_size - 1,
+                axis=1,
+            )[:, effective_cut_size - 1]
+            made_cut = two_round_scores <= cut_thresholds[:, None]
+        else:
+            made_cut = np.ones((current_batch, player_count), dtype=bool)
         make_cut_counts += made_cut.sum(axis=0)
         total_cut_count += int(made_cut.sum())
 
@@ -237,6 +255,9 @@ def simulate_tournament_rows(
         "seed": seed,
         "rounds": rounds,
         "cut_after_round": cut_after_round,
+        "cut_rule": cut_rule,
+        "cut_applied": cut_applied,
+        "configured_cut_size": cut_size,
         "cut_size": effective_cut_size,
         "average_players_making_cut": round(total_cut_count / simulations, 6),
         "sum_winner_probability": round(
@@ -267,6 +288,16 @@ def render_report(
     lines = ["# Performance-Only Tournament Simulation", ""]
     for key, value in summary.items():
         lines.append(f"- {key}: {value}")
+    if str(summary.get("cut_rule")) == CUT_RULE_NO_CUT:
+        lines.extend(
+            [
+                "",
+                "This event has no cut: every active player advances to all four",
+                "rounds. make_cut_prob is structural (1.0) and is not an empirical",
+                "prediction target.",
+                "",
+            ]
+        )
     lines.extend(
         [
             "",
@@ -300,6 +331,7 @@ def run_tournament_simulation(
     simulations: int = 20000,
     seed: int = 20260729,
     cut_size: int = 65,
+    cut_rule: str = CUT_RULE_TOP_N_AND_TIES,
     top_n: int = 25,
 ) -> dict[str, object]:
     rows, summary = simulate_tournament_rows(
@@ -309,6 +341,7 @@ def run_tournament_simulation(
         simulations=simulations,
         seed=seed,
         cut_size=cut_size,
+        cut_rule=cut_rule,
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     predictions_path = output_dir / "predictions.csv"
@@ -341,6 +374,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--simulations", type=int, default=20000)
     parser.add_argument("--seed", type=int, default=20260729)
     parser.add_argument("--cut-size", type=int, default=65)
+    parser.add_argument(
+        "--cut-rule",
+        choices=sorted(SUPPORTED_CUT_RULES),
+        default=CUT_RULE_TOP_N_AND_TIES,
+    )
     parser.add_argument("--top-n", type=int, default=25)
     args = parser.parse_args(argv)
 
@@ -352,6 +390,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         simulations=args.simulations,
         seed=args.seed,
         cut_size=args.cut_size,
+        cut_rule=args.cut_rule,
         top_n=args.top_n,
     )
     print(f"simulation_predictions={result['predictions_path']}")
