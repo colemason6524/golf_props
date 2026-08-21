@@ -1,6 +1,6 @@
 # Golf Props Project Handoff
 
-Last updated: 2026-08-10
+Last updated: 2026-08-21
 
 This is the authoritative continuity document for the repository. A new agent
 should read this file before making changes. It records the project goal,
@@ -99,25 +99,33 @@ replay as prospective evidence. Do not modify the frozen strength parameters
 
 ## Git and Workspace State
 
-As of this handoff:
+As of 2026-08-21 the repository has its first commits pushed to a remote:
 
 ```text
-## No commits yet on main
-?? .gitignore
-?? AGENTS.md
-?? README.md
-?? config/
-?? docs/
-?? logs/
-?? pyproject.toml
-?? src/
-?? tests/
+origin  https://github.com/colemason6524/golf_props.git (fetch/push)
+main    origin/main  (5 commits, no force pushes)
 ```
 
-There are no commits. The unusual all-untracked state is expected. Do not run
-`git clean`, reset, delete, or revert files. Large generated/research data under
-`data/raw`, `data/processed`, and `data/interim` is intentionally ignored by
-`.gitignore`, but it is essential local research state.
+Commits in order:
+
+1. `Bootstrap runnable PGA golf props research scaffold`
+2. `Document course identity crosswalk and frozen incumbent decision log (2026-08-10)`
+3. `Add explicit no-cut event-structure support and pre-start timestamp guard`
+4. `Refresh docs for 2026-08-20 handoff (no-cut support, TOUR Championship next eligible)`
+5. `Track logs directory scaffold so fresh clones pass scaffold checks`
+
+The repo is mirrored to the Windows Task Scheduler host at
+`C:\Users\muski\golf_props` (see `docs/windows_deployment.md`). Windows runs
+the same 117-test suite and has the frozen manifest, canonical history, and
+round-performance features with verified identical hashes. Bovada snapshot
+collection and the staged one-shot TOUR Championship forecast run as Windows
+Task Scheduler tasks.
+
+Large generated/research data under `data/raw`, `data/processed`, and
+`data/interim` is intentionally ignored by `.gitignore`, but it is essential
+local research state and is mirrored between hosts (Mac -> Windows for model
+inputs, Windows -> Mac via the pull-back routine for generated artifacts). Do
+not `git clean`, reset, delete, or revert files.
 
 The latest verified test result at handoff refresh:
 
@@ -778,6 +786,10 @@ verify the non-promotion decision after course identity is repaired.
   `data/interim/reports/course_challenger_validation/challenger_manifest.json`
 - Bovada collector report:
   `data/interim/reports/bovada_golf_odds_collection/report.md`
+- Windows deployment:
+  `docs/windows_deployment.md`
+- Git remote:
+  `https://github.com/colemason6524/golf_props.git` (`origin`)
 
 Generated artifacts are ignored by Git. Their existence must be checked on the
 local machine rather than inferred from repository status.
@@ -824,7 +836,8 @@ local machine rather than inferred from repository status.
 
 1. Confirm the workspace is `/Users/colemason/Documents/golf_props`.
 2. Read `AGENTS.md`, this entire handoff, and `docs/research_narrative.md`.
-3. Run `git status --short --branch` and preserve all untracked files.
+3. Run `git status --short --branch` and `git pull` against `origin/main` when a
+   remote sync is wanted; preserve all untracked files.
 4. Run `PYTHONPATH=src python3 -m pytest`.
 5. Inspect the frozen manifests and confirm generated data still exists.
 6. Resolve the playoff no-cut / event-structure question before forecasting
@@ -834,7 +847,8 @@ local machine rather than inferred from repository status.
    event-structure assumptions and only strictly before the first tee. The
    next eligible event is the 2026 TOUR Championship (competitive rounds
    2026-08-27 to 2026-08-30); its official field is final only after BMW
-   concludes on 2026-08-23.
+   concludes on 2026-08-23. The Windows scheduled forecast task only executes
+   once that field is preserved (see `docs/windows_deployment.md`).
 8. Update this handoff, the research narrative, and the continuation prompt
    whenever a decision, experiment, source status, frozen parameter, cutoff, or
    next task changes.
