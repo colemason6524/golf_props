@@ -1,0 +1,7 @@
+source,source_event_id,event_name,date_start,date_end,course_name,tour,season,player_name,finish_text,finish_position,made_cut,withdrawn,disqualified,total_score,total_to_par,earnings,r1,r2,r3,r4
+bootstrap_csv,espn_2025_players,THE PLAYERS Championship,2025-03-13,2025-03-16,TPC Sawgrass,PGA,2025,Scottie Scheffler,T5,5,true,false,false,278,-10,875000,68,70,69,71
+bootstrap_csv,espn_2025_players,THE PLAYERS Championship,2025-03-13,2025-03-16,TPC Sawgrass,PGA,2025,Rory McIlroy,1,1,true,false,false,272,-16,4500000,67,68,69,68
+bootstrap_csv,espn_2025_players,THE PLAYERS Championship,2025-03-13,2025-03-16,TPC Sawgrass,PGA,2025,Jordan Spieth,MC,,false,false,false,146,2,0,73,73,,
+bootstrap_csv,espn_2025_masters,Masters Tournament,2025-04-10,2025-04-13,Augusta National Golf Club,PGA,2025,Scottie Scheffler,2,2,true,false,false,281,-7,2100000,70,71,69,71
+bootstrap_csv,espn_2025_masters,Masters Tournament,2025-04-10,2025-04-13,Augusta National Golf Club,PGA,2025,Rory McIlroy,T12,12,true,false,false,286,-2,420000,71,72,70,73
+bootstrap_csv,espn_2025_masters,Masters Tournament,2025-04-10,2025-04-13,Augusta National Golf Club,PGA,2025,Jordan Spieth,WD,,false,true,false,,,,74,,,

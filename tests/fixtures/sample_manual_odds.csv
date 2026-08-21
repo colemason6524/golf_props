@@ -1,0 +1,4 @@
+captured_at_utc,sportsbook,event_name,season,market_type,player_name,line,price_american,source_url
+2025-04-09T18:00:00Z,FanDuel,Masters Tournament,2025,top20,Scottie Scheffler,,+110,https://sportsbook.example/masters
+2025-04-09T18:00:00Z,FanDuel,Masters Tournament,2025,top20,Rory McIlroy,,-120,https://sportsbook.example/masters
+2025-04-09T18:00:00Z,DraftKings,Masters Tournament,2025,make_cut,Jordan Spieth,,-200,https://sportsbook.example/masters

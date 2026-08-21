@@ -1,0 +1,17 @@
+.DS_Store
+__pycache__/
+.pycache/
+.pytest_cache/
+*.pyc
+
+# Large or generated research data
+data/raw/
+data/processed/
+data/interim/
+data/**/.DS_Store
+pga_results_2001-2025.tsv
+
+# Keep empty scaffold directories trackable when desired
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/interim/.gitkeep

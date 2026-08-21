@@ -1,0 +1,5 @@
+season	start	end	tournament	location	position	name	score	round1	round2	round3	round4	total	earnings	fedex_points
+2024	2024-03-14	2024-03-17	Example Championship	Example Golf Club - Somewhere, FL	1	Player One	-12	68	69	70	69	276	1000000	500
+2024	2024-03-14	2024-03-17	Example Championship	Example Golf Club - Somewhere, FL	T2	Player Two	-10	70	68	69	71	278	500000.50	300
+2024	2024-03-14	2024-03-17	Example Championship	Example Golf Club - Somewhere, FL	CUT	Player Three	CUT	74	75			149	0	0
+2024	2024-04-11	2024-04-14	Example Invitational		WD	Player Three	WD	75				75		0
