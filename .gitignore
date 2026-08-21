@@ -11,6 +11,10 @@ data/interim/
 data/**/.DS_Store
 pga_results_2001-2025.tsv
 
+# Generated task logs (keep only the tracked scaffold marker)
+logs/*
+!logs/.gitkeep
+
 # Keep empty scaffold directories trackable when desired
 !data/raw/.gitkeep
 !data/processed/.gitkeep
