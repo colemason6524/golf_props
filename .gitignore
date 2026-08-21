@@ -3,6 +3,7 @@ __pycache__/
 .pycache/
 .pytest_cache/
 *.pyc
+*.egg-info/
 
 # Large or generated research data
 data/raw/
