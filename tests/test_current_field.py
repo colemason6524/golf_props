@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -83,6 +84,33 @@ def test_cross_check_or_preliminary_not_ready(tmp_path):
         raw_root=tmp_path / "raw_events",
     )
     assert prelim.ready() is False
+
+
+def test_load_evidence_uses_adjacent_payload_when_copied_to_another_host(tmp_path):
+    payload = write_payload(
+        tmp_path / "field.csv",
+        ["player_name", "Scottie Scheffler", "Rory McIlroy"],
+    )
+    raw_root = tmp_path / "raw_events"
+    import_field_evidence(
+        "test_2025",
+        payload,
+        source_kind=SOURCE_KIND_OFFICIAL,
+        org="official_test",
+        url="https://example.com/field",
+        captured_at_utc="2025-04-29T00:00:00Z",
+        finality=FINALITY_FINAL,
+        event_name="Test Invitational",
+        raw_root=raw_root,
+    )
+    manifest_path = raw_root / "test_2025" / "field" / "latest" / "source_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["payload_path"] = "/different-host/field.csv"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    loaded = load_latest_field_evidence("test_2025", raw_root=raw_root)
+    assert loaded is not None
+    assert len(loaded.rows) == 2
 
 
 def test_payload_missing_required_column_raises(tmp_path):

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -90,3 +91,33 @@ def test_import_tee_time_evidence_round_trip(tmp_path):
     assert loaded is not None
     assert loaded.earliest_tee_at_utc == evidence.earliest_tee_at_utc
     assert loaded.reviewed_by == "operator"
+
+
+def test_load_tee_evidence_uses_adjacent_payload_when_copied_to_another_host(tmp_path):
+    payload = write_payload(
+        tmp_path / "tee.csv",
+        [
+            "player_name,local_tee_datetime,starting_hole",
+            "Scottie Scheffler,2025-05-01 07:00,1",
+        ],
+    )
+    raw_root = tmp_path / "raw_events"
+    import_tee_time_evidence(
+        "test_2025",
+        "Test Invitational",
+        payload,
+        org="official_test",
+        url="https://example.com/teetimes",
+        captured_at_utc="2025-04-30T00:00:00Z",
+        local_timezone="America/New_York",
+        reviewed_by="operator",
+        raw_root=raw_root,
+    )
+    manifest_path = raw_root / "test_2025" / "tee_times" / "latest" / "source_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["payload_path"] = "/different-host/tee.csv"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    loaded = load_latest_tee_time_evidence("test_2025", raw_root=raw_root)
+    assert loaded is not None
+    assert loaded.earliest_tee_at_utc == "2025-05-01T11:00:00Z"

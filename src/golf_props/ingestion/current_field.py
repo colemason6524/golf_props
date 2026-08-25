@@ -164,6 +164,8 @@ def load_latest_field_evidence(
         return None
     payload_path = Path(str(manifest.get("payload_path") or ""))
     if not payload_path.exists():
+        payload_path = evidence_dir / payload_path.name
+    if not payload_path.exists():
         return None
     try:
         rows = parse_field_payload(payload_path)

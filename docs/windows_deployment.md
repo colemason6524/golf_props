@@ -57,12 +57,11 @@ PYTHONPATH=src python3 -m pytest
 |---|---|---|---|
 | `GolfWeeklyForecast` | `scripts/windows/run_weekly_forecast.cmd` | Generic weekly frozen forecast (discovery, evidence, identity, archive) | Recurring every 2 hours |
 | `GolfBovadaCollect` | `scripts/windows/run_bovada_collect.cmd` | Bovada PGA odds snapshot (research only) | Recurring Mon/Wed/Thu (currently 09:00) |
-| `GolfTourChampionshipForecast` | `scripts/windows/run_tour_championship_forecast.cmd` | One-shot fallback for the 2026 TOUR Championship | One-shot 2026-08-26 09:00 |
 
-The one-shot TOUR Championship task is a fallback retained until the generic
-weekly task has produced a verified archive; it must not be run after the
-generic task archives the same event (the frozen pipeline and archive verify
-commands refuse overwrites).
+The one-shot `GolfTourChampionshipForecast` fallback was retired on 2026-08-25
+once the generic weekly task was armed with the official final field; its
+hardcoded placeholder tee timestamp made it unsafe as a fallback, and its
+wrapper remains only in Git history.
 
 ### Generic weekly task (`GolfWeeklyForecast`)
 
@@ -116,20 +115,9 @@ Status and control files live under `data/interim/weekly/`:
 `status.json`, `current_event_key.txt`, `<event_key>/event_control.json`,
 `<event_key>/identity_audit.json`.
 
-The one-shot forecast task is deliberately staged:
-
-1. It exits 0 (skip) if
-   `data\raw\fields\tour_championship_2026_field.csv` does not exist yet.
-2. It exits 0 (skip) if the bundle
-   `data\interim\reports\tour_championship_2026_frozen_simulation\run_manifest.json`
-   is already archived.
-3. It never overwrites an archived forecast.
-4. `TOUR_START_UTC` in the `.cmd` is a placeholder that must be set to the
-   verified first-tee UTC timestamp once tee times are posted (2026-08-25/26).
-
-The official top-30 field is only final after BMW concludes on 2026-08-23.
-The generic weekly task waits for that official evidence automatically; the
-one-shot task only executes when the preserved field exists.
+The official top-30 field was preserved on 2026-08-25 (PGA TOUR field page,
+official final, 30 rows, all identities resolve); both hosts are in
+`awaiting_tee_times` until reviewed Round 1 tee-time evidence is imported.
 
 ## Pull-back routine
 

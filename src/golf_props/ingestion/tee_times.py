@@ -166,6 +166,8 @@ def load_latest_tee_time_evidence(
         return None
     payload_path = Path(str(manifest.get("payload_path") or ""))
     if not payload_path.exists():
+        payload_path = evidence_dir / payload_path.name
+    if not payload_path.exists():
         return None
     try:
         rows = parse_tee_time_payload(payload_path)
