@@ -85,27 +85,33 @@ no-cut event-structure support and a pre-start timestamp guard. As of
 - the official top-30 field is determined by FedExCup standings after BMW
   concludes (2026-08-23) and cannot be preserved before then.
 
-The official top-30 TOUR Championship field is now preserved and ready on both
-Mac and Windows:
+The official top-30 TOUR Championship field AND Round 1 tee times are now
+preserved and armed on both Mac and Windows:
 
-- official source: PGA TOUR field page
+- official field source: PGA TOUR field page
   `https://www.pgatour.com/tournaments/2026/tour-championship/R2026060/field`;
-- official standings cross-check: `https://www.pgatour.com/fedexcup.html`,
-  explicitly labeled `Through the BMW Championship, August 23` and marking
-  ranks 1-30 `Top 30 - TOUR CHAMPIONSHIP`;
-- raw official HTML and capture: `data/raw/current_events/tour_championship_2026/`
-  `field/source/pgatour_field_2026-08-25.html` (SHA-256
-  `707a24e8b59e702cb56f78000080b941b2d657905c1b512309814cb0e7d46745`)
-  and `pgatour_field_capture_2026-08-25.md`;
-- imported official-final payload and manifest:
-  `data/raw/current_events/tour_championship_2026/field/latest/`;
-- 30 expected field rows; independent canonical identity audit resolves all 30
-  with no ambiguity, unknown IDs, or unmatched players.
+  standings cross-check labeled `Through the BMW Championship, August 23`;
+- official tee-time source: PGA TOUR tee-times page
+  `https://www.pgatour.com/tournaments/2026/tour-championship/R2026060/tee-times`
+  (raw HTML plus derivation notes under `data/raw/current_events/tour_championship_2026/tee_times/source/`);
+- verified first tee (earliest Round 1): **2026-08-27T15:00:00Z**
+  (11:00 AM EDT Thursday, all 15 groups off hole 1);
+- forecast due at T-12 hours: **2026-08-27T03:00:00Z** (Wed 11:00 PM EDT);
+- identity audit: all 30 field players resolve with no ambiguity;
+- both hosts report `forecast_ready`; `GolfWeeklyForecast` now has WakeToRun
+  enabled so the overnight due window wakes the machine.
 
-The weekly loop on both hosts is now `awaiting_tee_times`. The next queued task
-is to preserve reviewed official Round 1 tee-time evidence (including its IANA
-event timezone), derive the earliest tee UTC, and allow the frozen no-cut
-forecast to archive at T-12 hours strictly before the Thursday 2026-08-27 tee.
+Archive-of-record decision: the Windows-scheduled bundle under
+`data/interim/reports/prospective_forecasts/tour_championship_2026/` is the
+primary artifact to grade. Both hosts are armed and would each write a local
+archive; probabilities are seed-deterministic, but grading uses the pulled
+Windows bundle.
+
+The next queued task is: let the loop archive at T-12 (or run `weekly-forecast`
+manually between due and first tee), verify the archive hash manifest, pull it
+back to the Mac, and after Sunday's final round grade top-20/top-10/top-5/winner
+without retuning. If tee times change before Wednesday night, re-import updated
+evidence on both hosts before due time; the loader takes the newest capture.
 
 Preserve that forecast bundle unchanged for later grading. Keep sportsbook
 prices outside the performance computation, and do not use a retrospective
@@ -635,9 +641,10 @@ blocked, 20 hard error. State lives in `data/interim/weekly/` (`status.json`,
 Live validation: the pipeline fetched the real CBS schedule, correctly selected
 the 2026 TOUR Championship (skipping the in-progress BMW and the excluded
 Presidents Cup), and recorded `no_cut` from the reviewed registry. On 2026-08-25
-it accepted the preserved official PGA TOUR final field (30 rows; all canonical
-identities resolve) on both Mac and Windows. Both are now in
-`awaiting_tee_times`.
+it accepted the preserved official PGA TOUR final field (30 rows) AND reviewed
+official Round 1 tee times (earliest tee 2026-08-27T15:00:00Z). All 30 field
+identities resolve. Both hosts are `forecast_ready` with the archive due at
+2026-08-27T03:00:00Z.
 
 Frozen-input policy: the weekly pipeline does **not** refresh historical
 performance. It continues to use the frozen manifest's hashed inputs
@@ -668,18 +675,17 @@ The event-structure question is resolved in code:
 
 ### Prospective protocol once the field is final
 
-The weekly loop automates steps 2-6 below. The official field step is complete;
-it still requires reviewed operator evidence for tee times:
+The weekly loop automates steps 2-6 below. The official field and tee-time
+steps are complete; the remaining work is automated archive plus grading:
 
-1. Completed 2026-08-25: preserve the official PGA Tour / FedExCup top-30 TOUR
-   Championship field as reviewed **official** final evidence. The field has 30
-   rows and all identities resolve.
-2. Once tee times are posted, preserve them as reviewed evidence with the event
-   local timezone (`import-current-tee-time-evidence --local-timezone ...`).
-3. The `GolfWeeklyForecast` task (or `weekly-forecast` locally) resolves
-   identities, runs `predict-current-event --cut-rule no_cut` at T-12 hours,
-   and archives the immutable bundle with all evidence hashed.
-4. Verify the archive (`verify-forecast-archive`).
+1. Completed 2026-08-25: preserve the official PGA TOUR top-30 field as reviewed
+   **official** final evidence (30 rows; all identities resolve).
+2. Completed 2026-08-25: preserve official Round 1 tee times with the event
+   local timezone (`America/New_York`); earliest tee 2026-08-27T15:00:00Z.
+3. The `GolfWeeklyForecast` task resolves identities, runs the frozen
+   `no_cut` forecast at T-12 hours, and archives the immutable bundle with all
+   evidence hashed (WakeToRun enabled for the overnight window).
+4. Verify the archive (`verify-forecast-archive`) and pull it back to the Mac.
 5. After the event, grade the frozen top-20/top-10/top-5/winner probabilities
    without retuning (`make_cut` is structural under no-cut and must not be a
    substantive target).
