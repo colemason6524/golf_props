@@ -225,20 +225,26 @@ Required protocol:
 Bovada timestamp collection may continue in parallel. Odds must not block this
 loop. Legacy heuristic rankings/value reports remain exploratory only.
 
-## Where We Are On The Calendar (2026-08-20)
+## Where We Are On The Calendar (2026-08-28)
 
-- Prospective threshold: events must start **strictly after** 2026-08-06.
-- Wyndham (start 2026-08-06): retrospective engineering replay only.
-- FedEx St. Jude Championship (2026-08-13): window closed before no-cut support;
-  not prospectively eligible.
-- BMW Championship (2026-08-20 to 2026-08-23): Round 1 already complete at this
-  handoff; not prospectively eligible.
-- 2026 TOUR Championship: competitive dates **2026-08-27 to 2026-08-30** at East
-  Lake Golf Club; 30 players; no cut; 72-hole stroke play; all players start at
-  even par. This is the next genuinely eligible prospective event.
-- As of this handoff, no prospective forecast bundle has been archived yet. The
-  TOUR Championship field is not final until BMW concludes on 2026-08-23, and
-  the forecast must run strictly before the Thursday 2026-08-27 first tee.
+- The 2026 TOUR Championship forecast was **archived before the first tee** by
+  the Windows scheduler (2026-08-27T04:00:02Z vs a 15:00:00Z tee,
+  `pre_start_verified`). This is the project's first genuinely prospective
+  frozen bundle; grading follows the final round without retuning.
+- A state lesson from the same week: after an archive, the loop advances to the
+  next event and blocks with exit 10 until a human reviews it. Ten scheduled
+  "failures" a day can look like breakage; it is the designed
+  operator-review signal. The durable fix is procedural: review the next event
+  in the registry promptly after each archive.
+- Next event: **Biltmore Championship Asheville** (official R2026557, The
+  Cliffs at Walnut Cove, 2026-09-17 to 2026-09-20), a FedExCup Fall main
+  event. Reviewed into the registry with the ordinary top-65-and-ties
+  structure; included provisionally pending Bovada market availability
+  (re-check before 2026-09-10). Both hosts wait in `awaiting_field`.
+- Official-vs-discovery timing differs (CBS says Sep 16-19; official says
+  Sep 17-20). Discovery dates group weeks only; competitive timing still comes
+  exclusively from reviewed tee-time evidence.
+- Presidents Cup (2026-09-24 to 2026-09-27) remains excluded (team match play).
 
 ## Critical Watch-Outs For The Next Session
 

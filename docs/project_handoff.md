@@ -1,6 +1,6 @@
 # Golf Props Project Handoff
 
-Last updated: 2026-08-25
+Last updated: 2026-08-28
 
 This is the authoritative continuity document for the repository. A new agent
 should read this file before making changes. It records the project goal,
@@ -68,50 +68,49 @@ target for such events.
 ## Exact Stopping Point
 
 No command or background process is currently running. Documentation was
-refreshed on 2026-08-20. The frozen current-event workflow now includes explicit
-no-cut event-structure support and a pre-start timestamp guard. As of
-2026-08-20:
+refreshed on 2026-08-28.
 
-- no genuinely prospective frozen forecast has been archived yet;
-- FedEx St. Jude (2026-08-13) was missed because its window closed before the
-  no-cut path was available;
-- the BMW Championship (2026-08-20 to 2026-08-23) was in progress with Round 1
-  complete at this handoff, so it also cannot be forecast prospectively;
-- the next genuinely eligible event is the **2026 TOUR Championship** at East
-  Lake Golf Club (event window 2026-08-26 to 2026-08-30; competitive rounds
-  Thursday 2026-08-27 to Sunday 2026-08-30), a 30-player no-cut 72-hole
-  stroke-play event with all players starting at even par, which the frozen
-  simulator can represent with `--cut-rule no_cut`;
-- the official top-30 field is determined by FedExCup standings after BMW
-  concludes (2026-08-23) and cannot be preserved before then.
+**The first genuinely prospective frozen forecast was archived before the first
+tee and is the project's primary prospective artifact:**
 
-The official top-30 TOUR Championship field AND Round 1 tee times are now
-preserved and armed on both Mac and Windows:
+- the Windows-scheduled `GolfWeeklyForecast` task archived the 2026 TOUR
+  Championship bundle at 2026-08-27T04:00:02Z (12:00 AM EDT Thursday), about
+  11 hours before the verified 2026-08-27T15:00:00Z first tee;
+- `pre_start_verified=true`; `verify-forecast-archive` passes on both hosts;
+- the bundle was pulled back to the Mac and its `predictions.csv` SHA-256
+  (`412f99b501d33d769c12d1f4d257405a7177d55d0925d1daaa1d72e034276fcb`) matches
+  the Windows record byte-for-byte;
+- archive location (both hosts):
+  `data/interim/reports/prospective_forecasts/tour_championship_2026/`;
+- the Mac's local weekly state for this event reads `deadline_missed` because
+  its loop ran after the tee passed; that is a local state artifact only. The
+  Windows archived bundle is the record (per the archive-of-record decision).
 
-- official field source: PGA TOUR field page
-  `https://www.pgatour.com/tournaments/2026/tour-championship/R2026060/field`;
-  standings cross-check labeled `Through the BMW Championship, August 23`;
-- official tee-time source: PGA TOUR tee-times page
-  `https://www.pgatour.com/tournaments/2026/tour-championship/R2026060/tee-times`
-  (raw HTML plus derivation notes under `data/raw/current_events/tour_championship_2026/tee_times/source/`);
-- verified first tee (earliest Round 1): **2026-08-27T15:00:00Z**
-  (11:00 AM EDT Thursday, all 15 groups off hole 1);
-- forecast due at T-12 hours: **2026-08-27T03:00:00Z** (Wed 11:00 PM EDT);
-- identity audit: all 30 field players resolve with no ambiguity;
-- both hosts report `forecast_ready`; `GolfWeeklyForecast` now has WakeToRun
-  enabled so the overnight due window wakes the machine.
+**Next event review completed 2026-08-28:** the loop had been exiting 10
+(`blocked`) every two hours since the archive because the next CBS-discovered
+event, `Biltmore Championship Asheville`, had no reviewed registry row. That is
+designed fail-closed behavior, not a bug. It was resolved by an official-source
+review and a new registry row:
 
-Archive-of-record decision: the Windows-scheduled bundle under
-`data/interim/reports/prospective_forecasts/tour_championship_2026/` is the
-primary artifact to grade. Both hosts are armed and would each write a local
-archive; probabilities are seed-deterministic, but grading uses the pulled
-Windows bundle.
+- official source (preserved under
+  `data/raw/current_events/_registry_review/`): PGA TOUR schedule page,
+  tournament id `R2026557`, name `Biltmore Championship Asheville`,
+  The Cliffs at Walnut Cove, Asheville, NC;
+- official dates **2026-09-17 to 2026-09-20** (the CBS discovery schedule says
+  Sep 16-19; CBS is discovery-only and the official page is authoritative for
+  timing);
+- FedExCup Fall points event (500 pts, $5M purse): a main-field event, not
+  opposite-field;
+- structure decision (explicit and logged): 72-hole stroke play, 4 rounds,
+  ordinary `top_n_and_ties` cut with the frozen cut size 65;
+- inclusion decision: `include=1` **provisionally** under the operator rule
+  "include when book markets exist." Bovada had not yet posted Biltmore
+  markets as of 2026-08-27 (feed listed only TOUR Championship). Re-check
+  Bovada market availability before 2026-09-10; if markets never appear, flip
+  `include` to 0 so the loop skips ahead.
 
-The next queued task is: let the loop archive at T-12 (or run `weekly-forecast`
-manually between due and first tee), verify the archive hash manifest, pull it
-back to the Mac, and after Sunday's final round grade top-20/top-10/top-5/winner
-without retuning. If tee times change before Wednesday night, re-import updated
-evidence on both hosts before due time; the loader takes the newest capture.
+Both hosts now select the Biltmore Championship Asheville and wait quietly in
+`awaiting_field` (exit 0) until reviewed official field evidence is imported.
 
 Preserve that forecast bundle unchanged for later grading. Keep sportsbook
 prices outside the performance computation, and do not use a retrospective
@@ -643,8 +642,12 @@ the 2026 TOUR Championship (skipping the in-progress BMW and the excluded
 Presidents Cup), and recorded `no_cut` from the reviewed registry. On 2026-08-25
 it accepted the preserved official PGA TOUR final field (30 rows) AND reviewed
 official Round 1 tee times (earliest tee 2026-08-27T15:00:00Z). All 30 field
-identities resolve. Both hosts are `forecast_ready` with the archive due at
-2026-08-27T03:00:00Z.
+identities resolved. The Windows task archived the bundle at T-11 hours on
+2026-08-27. After the archive, the loop advanced to the next event and, once
+the Biltmore Championship Asheville registry row was added on 2026-08-28, both
+hosts moved to `awaiting_field` for it (exit 0, no operator noise). The
+scheduled task's exit code 10 (`blocked`) between 2026-08-27 and 2026-08-28 was
+the designed unreviewed-next-event signal, not a malfunction.
 
 Frozen-input policy: the weekly pipeline does **not** refresh historical
 performance. It continues to use the frozen manifest's hashed inputs
@@ -652,46 +655,57 @@ performance. It continues to use the frozen manifest's hashed inputs
 separate scientific decision that must not be slipped into operational
 automation.
 
-## Exact Next Task: First Prospective Forecast
+## Exact Next Task: Grade the First Prospective Forecast
 
-### Immediate decision required before running the TOUR Championship
+### 1. After the 2026 TOUR Championship concludes (Sunday 2026-08-30 / Monday 2026-08-31)
 
-FedEx St. Jude (2026-08-13) and BMW (2026-08-20) are no longer prospectively
-eligible. The next genuinely eligible event is the 2026 TOUR Championship
-(competitive dates 2026-08-27 to 2026-08-30), a 30-player no-cut 72-hole
-stroke-play event at East Lake with all players starting at even par. The
-simulator now represents this honestly with `--cut-rule no_cut`; the frozen
-365/8/20 strength parameters are unchanged.
+The archive-of-record is
+`data/interim/reports/prospective_forecasts/tour_championship_2026/`
+(verified on both hosts; `predictions.csv` SHA-256
+`412f99b501d33d769c12d1f4d257405a7177d55d0925d1daaa1d72e034276fcb`).
+
+1. Collect official final results for the event (CBS collector is the
+   established completed-results source; preserve the raw page first).
+2. Grade the frozen `predictions.csv` against actual outcomes for
+   top-20/top-10/top-5/winner: Brier/log-loss per target plus calibration
+   versus the rolling expectations. `make_cut` is structural (1.0) under
+   no-cut and is NOT a graded target.
+3. Record the outcome without retuning. Win or lose, the frozen 365/8/20
+   incumbent stays unchanged.
+4. Update this handoff and the research narrative with the graded result.
+
+### 2. Before 2026-09-10: confirm Bovada markets exist for Biltmore
+
+The Biltmore Championship Asheville registry row is `include=1`
+provisionally. Run `collect-bovada-golf-odds` (or check the feed directly)
+before 2026-09-10:
+
+- if Biltmore markets appear, leave the row as is;
+- if they never appear, flip `include` to 0 (and note why) so the loop skips
+  to the next main event.
+
+### 3. Mid-September: arm the Biltmore forecast
+
+When the official field and tee times post (official competitive dates
+2026-09-17 to 2026-09-20):
+
+1. preserve official field evidence (`import-current-field-evidence`,
+   `source_kind=official`, `finality=final`);
+2. preserve official tee times (`import-current-tee-time-evidence`,
+   `--local-timezone America/New_York`);
+3. the loop archives at T-12 hours automatically (Windows WakeToRun enabled).
+
+### Standing protocol (unchanged)
 
 The event-structure question is resolved in code:
 
-1. **Preferred path (implemented):** explicit, logged no-cut event-structure
-   handling without changing 365/8/20 strength parameters. `predict-current-event`
-   now accepts `--cut-rule no_cut` and a `--event-start-at-utc` guard. Run the
-   TOUR Championship prospectively with both.
+1. **Preferred path (implemented):** explicit, logged event-structure handling
+   without changing 365/8/20 strength parameters. Ordinary events use the
+   default `top_n_and_ties` cut; playoff events use `--cut-rule no_cut`; all
+   prospective runs carry a `--event-start-at-utc` guard.
 2. **Forbidden:** inventing a cut that does not exist, backdating a forecast
    after the first tee, counting Wyndham as prospective, or retuning strength
    parameters for one event.
-
-### Prospective protocol once the field is final
-
-The weekly loop automates steps 2-6 below. The official field and tee-time
-steps are complete; the remaining work is automated archive plus grading:
-
-1. Completed 2026-08-25: preserve the official PGA TOUR top-30 field as reviewed
-   **official** final evidence (30 rows; all identities resolve).
-2. Completed 2026-08-25: preserve official Round 1 tee times with the event
-   local timezone (`America/New_York`); earliest tee 2026-08-27T15:00:00Z.
-3. The `GolfWeeklyForecast` task resolves identities, runs the frozen
-   `no_cut` forecast at T-12 hours, and archives the immutable bundle with all
-   evidence hashed (WakeToRun enabled for the overnight window).
-4. Verify the archive (`verify-forecast-archive`) and pull it back to the Mac.
-5. After the event, grade the frozen top-20/top-10/top-5/winner probabilities
-   without retuning (`make_cut` is structural under no-cut and must not be a
-   substantive target).
-6. Add the next reviewed event to `config/event_registry.csv` so the loop can
-   select the following week's tournament.
-7. Repeat across future events.
 
 Bovada timestamp collection may continue in parallel. Odds stay outside the
 performance model and must not block this loop.

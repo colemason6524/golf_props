@@ -1,3 +1,4 @@
 season,source_event_id,event_name,include,format,rounds,cut_rule,cut_size,decision_status,reviewed_at_utc,notes
 2026,,TOUR Championship,1,72_hole_stroke_play,4,no_cut,0,reviewed,2026-08-21T00:00:00Z,FedExCup finale no-cut; official top-30 field final after BMW concludes 2026-08-23
 2026,,Presidents Cup,0,,,,,,reviewed,2026-08-21T00:00:00Z,Team match-play event; not a stroke-play forecast target
+2026,,Biltmore Championship Asheville,1,72_hole_stroke_play,4,top_n_and_ties,65,reviewed,2026-08-28T02:30:00Z,Official R2026557; FedExCup Fall main event at The Cliffs at Walnut Cove; official dates Sep 17-20 (CBS discovery says Sep 16-19; CBS discovery-only); ordinary top-65 cut per standard fall stroke-play structure (logged decision); included provisionally on main-event status - Bovada markets not yet posted as of 2026-08-27; re-check before 2026-09-10 and flip include to 0 if markets never appear
