@@ -37,18 +37,20 @@ Progress framing (do not get this wrong):
 
 Important repository state:
 
-- There are currently no Git commits; most project files are untracked.
+- The repository has commits and tracks code/docs; generated research data
+  remains intentionally ignored.
 - Large data and generated reports under `data/` are intentionally ignored but
   are important local research state.
 - Do not delete, clean, reset, or revert anything unless explicitly asked.
-- The verified test suite had 117 passing tests at the 2026-08-20 handoff.
+- The verified test suite had 226 passing tests at the 2026-09-18 refresh.
 
 Important model state:
 
 - Frozen incumbent: 365-day half-life, 8-round mean prior, 20-round variance
   prior, seeded joint-field simulator. Ordinary top-65-and-ties cut is the
-  historical default; an explicit `no_cut` event-structure rule now exists and
-  is used for no-cut playoff events without changing 365/8/20 strength.
+  historical default; FedExCup Playoff events are auto-included under an explicit
+  `no_cut` rule (starting-stroke adjustments are not modelled) without changing
+  365/8/20 strength.
 - Supported by four rolling evaluation folds covering 182 tournaments versus a
   structural field baseline. This is NOT proof of betting edge.
 - Calibration slopes > 1 suggest compressed probabilities; watch this in
@@ -73,31 +75,34 @@ Completed and settled:
   365/8/20, prospective eligibility, forecast bundle outputs, explicit
   `--cut-rule no_cut` support, and a pre-start timestamp guard
   (`--event-start-at-utc`).
+- Forecast-only private Discord board: `publish-forecast-board` verifies a
+  prospective archive, writes delivery artifacts, and the weekly pipeline can
+  publish newly archived forecasts when its protected webhook is configured.
+  Urgent, actionable failures post to the same main channel with a `[URGENT]`
+  prefix; routine processing is silent and no second webhook is needed.
 - Wyndham Championship 2026 dry-run at
   `data/interim/reports/wyndham_championship_2026_frozen_simulation/`
   is permanently labeled `retrospective_replay` because start date equals
   `prospective_holdout_after=2026-08-06`. Do NOT treat it as prospective
   evidence.
 
-Exact next task:
+Current prospective state and exact next task:
 
-1. The event-structure question is now resolved in code: `predict-current-event`
-   accepts `--cut-rule {top_n_and_ties,no_cut}` and requires a timezone-aware
-   `--event-start-at-utc` strictly after run creation for prospective runs.
-   Do NOT change frozen strength parameters (365/8/20).
-2. FedEx St. Jude (2026-08-13) and BMW (2026-08-20) are no longer prospectively
-   eligible. The next genuinely eligible event is the 2026 TOUR Championship:
-   competitive rounds 2026-08-27 to 2026-08-30 at East Lake, 30 players, no
-   cut, 72-hole stroke play, all players at even par.
-3. Its official top-30 field is final only after BMW concludes (2026-08-23).
-   After that, preserve the authoritative official field, resolve identities
-   safely, verify the first-tee UTC timestamp once tee times are posted, and run
-   `predict-current-event --cut-rule no_cut --event-start-at-utc <verified>`
-   WITHOUT `--allow-retrospective`, strictly before the Thursday 2026-08-27
-   first tee.
-4. Archive the bundle unchanged; grade top-20/top-10/top-5/winner later without
-   retuning. `make_cut` is structural (1.0) under no-cut and is not a
-   substantive target. Repeat across future events.
+1. The first prospective forecast, 2026 TOUR Championship, was archived before
+   tee time and graded on 2026-09-01. Scottie Scheffler was the highest forecast
+   winner and won. All four requested Brier scores beat structural baseline;
+   all were worse than historical rolling aggregates. One event is not enough
+   to retune or claim stable calibration.
+2. Grade artifacts are under
+   `data/interim/reports/prospective_forecast_grades/tour_championship_2026/`;
+   `make_cut` was excluded and J.J. Spaun's zero-round WD left 29 graded rows.
+3. Biltmore Championship Asheville is the current reviewed event (2026-09-17 to
+   2026-09-20), but the Azure workflow is still `awaiting_field`; no Biltmore
+   archive exists. Preserve official final field and tee-time evidence if the
+   pre-start window remains available; otherwise wait for the next event.
+4. Grade each valid prospective archive with `grade-forecast`, without retuning
+   365/8/20. A verified archive publishes automatically to the private board
+   when the protected webhook is configured.
 5. Forbidden: inventing a cut that does not exist, backfilling after tee time,
    counting Wyndham as OOS, or using odds inside the performance model.
 6. Bovada timestamp collection may continue in parallel but must not block
@@ -105,13 +110,14 @@ Exact next task:
 
 Watch-outs the previous session wants questioned:
 
-- Playoff no-cut / special formats vs top-65 simulator assumption.
-- Missing the TOUR Championship window after Thursday 2026-08-27 tee times.
+- Playoff structures are auto-handled as no_cut; watch that starting-stroke /
+  staggered-start adjustments are still unmodelled.
+- Missing future forecast windows while waiting for reviewed field/tee evidence.
 - Using Bovada as field-of-record instead of official PGA field.
 - Stale local history (`source_data_through=2026-07-11`) vs market knowledge.
 - Calibration compression and weak structural benchmarks tempting overclaim.
 - Silent name-match fallbacks degrading forecasts.
-- No Git commits / ignored `data/` durability risk.
+- Uncommitted working-tree changes / ignored `data/` durability risk.
 
 Do not reopen casually:
 

@@ -1,0 +1,13 @@
+[Unit]
+Description=Golf props tmux scheduler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/golf_props/scripts/linux/start_golf_tmux_scheduler.sh
+ExecStop=/usr/bin/tmux kill-session -t golf-scheduler
+
+[Install]
+WantedBy=default.target

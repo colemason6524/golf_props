@@ -1,0 +1,23 @@
+[Unit]
+Description=Run golf forecast workflow every two hours
+
+[Timer]
+OnCalendar=*-*-* 00:17:00 America/Detroit
+OnCalendar=*-*-* 02:17:00 America/Detroit
+OnCalendar=*-*-* 04:17:00 America/Detroit
+OnCalendar=*-*-* 06:17:00 America/Detroit
+OnCalendar=*-*-* 08:17:00 America/Detroit
+OnCalendar=*-*-* 10:17:00 America/Detroit
+OnCalendar=*-*-* 12:17:00 America/Detroit
+OnCalendar=*-*-* 14:17:00 America/Detroit
+OnCalendar=*-*-* 16:17:00 America/Detroit
+OnCalendar=*-*-* 18:17:00 America/Detroit
+OnCalendar=*-*-* 20:17:00 America/Detroit
+OnCalendar=*-*-* 22:17:00 America/Detroit
+AccuracySec=1s
+RandomizedDelaySec=0
+Persistent=true
+Unit=sports-golf-forecast.service
+
+[Install]
+WantedBy=timers.target

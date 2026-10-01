@@ -1,0 +1,10 @@
+[Unit]
+Description=Golf frozen forecast workflow
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=%h/golf_props/scripts/linux/run_linux_task.sh
+
+[Service]
+Type=oneshot
+ExecStart=%h/golf_props/scripts/linux/run_linux_task.sh weekly-forecast
+TimeoutStartSec=infinity

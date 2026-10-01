@@ -102,12 +102,21 @@ def resolve_player(
     ids_by_normal: dict[str, list[str]],
     ids_by_compact: dict[str, list[str]],
     aliases: dict[str, str],
+    source_id_namespace: Optional[str] = None,
 ) -> ResolvedPlayer:
     player_name = str(field_row.get("player_name") or "").strip()
     entry_status = str(field_row.get("entry_status") or "confirmed").strip()
     supplied_id = str(field_row.get("player_id") or "").strip()
+    # A source-namespace id (e.g. a PGA TOUR id) is not a canonical id. It is
+    # preserved for auditing but never used for canonical lookup, so players are
+    # resolved by name and the source id does not cause a false unknown-id block.
+    source_note = (
+        f"source[{source_id_namespace}]_id={supplied_id}"
+        if supplied_id and source_id_namespace
+        else ""
+    )
 
-    if supplied_id:
+    if supplied_id and not source_id_namespace:
         if supplied_id not in by_id:
             return ResolvedPlayer(player_name, supplied_id, entry_status, UNKNOWN_ID)
         canonical_name = by_id[supplied_id]
@@ -124,23 +133,47 @@ def resolve_player(
     compact = compact_name(player_name)
     alias_id = aliases.get(compact)
     if alias_id and alias_id in by_id:
-        return ResolvedPlayer(by_id[alias_id], alias_id, entry_status, MATCHED)
+        return ResolvedPlayer(
+            by_id[alias_id], alias_id, entry_status, MATCHED, note=source_note
+        )
 
-    normal_candidates = ids_by_normal.get(normalize_name(player_name), [])
-    if len(normal_candidates) == 1:
-        player_id = normal_candidates[0]
-        return ResolvedPlayer(by_id[player_id], player_id, entry_status, MATCHED)
-    if len(normal_candidates) > 1:
-        return ResolvedPlayer(player_name, "", entry_status, AMBIGUOUS)
+    # Some sources (e.g. the PGA TOUR collector) provide names as "Last, First".
+    # That reversal never matches the canonical "First Last" index, so it is
+    # tried explicitly as an additional lookup variant. Only the lookup variant
+    # is affected; the reported name is preserved as supplied.
+    lookup_names = [player_name]
+    if ", " in player_name:
+        last, _, rest = player_name.partition(", ")
+        suffix = rest.rsplit(",", 1)[-1].strip() if rest.endswith(",") else rest
+        if last.strip() and suffix.strip():
+            lookup_names.append(f"{suffix} {last.strip()}")
 
-    compact_candidates = ids_by_compact.get(compact, [])
-    if len(compact_candidates) == 1:
-        player_id = compact_candidates[0]
-        return ResolvedPlayer(by_id[player_id], player_id, entry_status, MATCHED)
-    if len(compact_candidates) > 1:
-        return ResolvedPlayer(player_name, "", entry_status, AMBIGUOUS)
+    matched_variants: list[str] = []
+    ambiguous_variant = False
+    for lookup in lookup_names:
+        candidates = ids_by_normal.get(normalize_name(lookup), [])
+        if len(candidates) == 1:
+            matched_variants.append(candidates[0])
+        elif len(candidates) > 1:
+            ambiguous_variant = True
+    for lookup in lookup_names:
+        candidates = ids_by_compact.get(compact_name(lookup), [])
+        if len(candidates) == 1:
+            matched_variants.append(candidates[0])
+        elif len(candidates) > 1:
+            ambiguous_variant = True
+    if ambiguous_variant and not matched_variants:
+        return ResolvedPlayer(player_name, "", entry_status, AMBIGUOUS, note=source_note)
+    unique_ids = {pid for pid in matched_variants if pid}
+    if len(unique_ids) == 1:
+        player_id = matched_variants[0]
+        return ResolvedPlayer(
+            by_id[player_id], player_id, entry_status, MATCHED, note=source_note
+        )
+    if len(unique_ids) > 1:
+        return ResolvedPlayer(player_name, "", entry_status, AMBIGUOUS, note=source_note)
 
-    return ResolvedPlayer(player_name, "", entry_status, UNMATCHED)
+    return ResolvedPlayer(player_name, "", entry_status, UNMATCHED, note=source_note)
 
 
 def resolve_field_identities(
@@ -148,12 +181,20 @@ def resolve_field_identities(
     players_rows: list[dict[str, str]],
     aliases_path: Path = DEFAULT_ALIASES_PATH,
     prior_player_ids: Optional[set[str]] = None,
+    source_id_namespace: Optional[str] = None,
 ) -> tuple[list[ResolvedPlayer], dict[str, Any]]:
     by_id, ids_by_normal, ids_by_compact = build_canonical_index(players_rows)
     aliases = load_aliases(aliases_path)
     prior_player_ids = prior_player_ids or set()
     resolved = [
-        resolve_player(row, by_id, ids_by_normal, ids_by_compact, aliases)
+        resolve_player(
+            row,
+            by_id,
+            ids_by_normal,
+            ids_by_compact,
+            aliases,
+            source_id_namespace=source_id_namespace,
+        )
         for row in field_rows
     ]
     for item in resolved:
@@ -168,10 +209,16 @@ def resolve_field_identities(
         for item in resolved
         if item.match_status in BLOCKING_STATUSES
     ]
+    warnings = [
+        f"{item.player_name}: {item.match_status}"
+        for item in resolved
+        if item.match_status == MATCHED_NO_PRIOR
+    ]
     audit = {
         "total": len(resolved),
         "match_status_counts": dict(sorted(counts.items())),
         "problems": problems,
+        "warnings": warnings,
         "ok": not problems,
     }
     return resolved, audit

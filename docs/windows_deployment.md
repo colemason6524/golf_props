@@ -1,11 +1,14 @@
-# Windows Deployment
+# Retired Windows Deployment
 
-Last updated: 2026-08-21
+Last updated: 2026-09-16
 
-How the golf_props repo is mirrored to the Windows Task Scheduler host, matching
-the horses/tennis pattern.
+> **Retired 2026-09-08.** Do not restore, modify, or depend on this host or its
+> Task Scheduler tasks. It is retained only as historical documentation for the
+> 2026 TOUR Championship archive-of-record. Current operations are documented in
+> `docs/azure_deployment.md`; the Mac is the durable workspace and bulk-data
+> location.
 
-## Layout
+## Historical Layout
 
 - Mac (source of truth): `/Users/colemason/Documents/golf_props`
 - GitHub remote: `https://github.com/colemason6524/golf_props.git` (`origin`)
@@ -17,9 +20,11 @@ the horses/tennis pattern.
 
 ## Current state
 
-- Mac `main` has 5 commits pushed to `origin/main` (bootstrap scaffold, 2026-08-10
-  decision docs, no-cut + pre-start guard, 2026-08-20 docs refresh, `logs/.gitkeep`).
-- Windows clone is on `main` tracking `origin/main`; 117 tests pass on both hosts.
+- At retirement, the Windows clone was no longer an active deployment target.
+  Current code and documentation history is maintained on Mac `main`; Azure is
+  the only active scheduler host.
+- Windows is retained only as historical context for the TOUR Championship
+  archive-of-record and is not part of current validation.
 - Essential research data is mirrored to Windows so `predict-current-event` can
   run there with hash verification passing:
   - `data/processed/pga_2001_2026`

@@ -1,6 +1,6 @@
 # Golf Props Project Handoff
 
-Last updated: 2026-08-28
+Last updated: 2026-10-01
 
 This is the authoritative continuity document for the repository. A new agent
 should read this file before making changes. It records the project goal,
@@ -67,13 +67,92 @@ target for such events.
 
 ## Exact Stopping Point
 
-No command or background process is currently running. Documentation was
-refreshed on 2026-08-28.
+**2026-09-30/10-01 session (return from hiatus, Bank of Utah rescue):**
+
+The second genuinely prospective forecast was archived pre-start for the 2026
+Bank of Utah Championship (`bank_of_utah_championship_2026`, PGA TOUR
+`R2026554`) at 2026-10-01T03:26Z on Azure, before the conservative
+midnight-Oct-1 first-tee guard and before the real Thursday tee times. The
+Discord forecast board published successfully (`delivery status: sent`).
+Grading after the event completes is the next operational task.
+
+The session diagnosed and fixed three defects that would have killed the
+prospective window:
+
+1. **"Last, First" identity mismatch fixed.** The PGA TOUR collector emits
+   field names as `"Akina, Kihei"`; canonical history is `"Kihei Akina"`. The
+   old resolver matched none of the 115 players and silently admitted the
+   whole field with blank ids — a tour-prior-only forecast with no value.
+   `resolve_player` now tries the reversed lookup variant explicitly;
+   ambiguity still fails closed. After the fix: 113 matched, 2 unmatched
+   admitted (Boston Bracken, Kristoffer Ventura — genuine no-history players).
+2. **Tee-time fallback deadlock fixed.** `_apply_tee_times` skipped the
+   official-start/night-before fallback whenever `forecast_due_at_utc` was
+   already set, so an event whose collector returns no parseable tee times sat
+   in `forecast_ready` forever with an empty blocking reason and the forecast
+   never archived. The fallback is now recomputed idempotently every run.
+3. **All-unmatched guardrail added.** A field with zero canonical matches now
+   fails closed (`identity gate blocked` ops alert, `blocked` state) instead of
+   passing silently under the single-longshot admission policy. A fully
+   unmatched field is a systematic source-format failure, not independent
+   longshots.
+
+Regression tests added: `test_tee_time_fallback_not_disabled_by_prior_due`,
+`test_identify_reversed_last_first_names`,
+`test_identity_blocks_fully_unmatched_field`. Mac suite grew 226 -> 229
+passing; the Azure test set passes (218). The dirty-tree work from the
+2026-09-18 session (automated collector, auto-rollover/auto-structure,
+forecast grading, Discord board, Linux deployment scripts, docs) was committed
+and pushed in this session; Azure was synced back to `origin/main`.
+
+Note: the collector-discovered `first_tee_at_utc` for this event is the
+official start date at local midnight
+(`2026-10-01T00:00:00-04:00`) — a conservative lower bound that makes the
+pre-start guard stricter, not looser. Real tee times exist on the official
+site, but the tee-time parser found none this week; the fallback is recorded
+as `timing_source: schedule_date_fallback` in the archive.
+
+**Historical stopping point (pre-2026-09-30):** the automated PGA TOUR
+collector was deployed and verified on 2026-09-17:**
+
+- `src/golf_props/ingestion/pga_tour_collector.py`: automated field/tee-time
+  collection from the official PGA TOUR website;
+- `src/golf_props/pipelines/weekly_forecast.py`: wired in automated collection
+  with fallback to manual evidence;
+- `tests/test_pga_tour_collector.py`: 32 tests, all passing (205 total);
+- deployed to Azure: field collection verified (132 players for Biltmore);
+- tee-time collection returns empty when the page doesn't contain parseable
+  tee-time data (e.g., tournament already in progress);
+
+**Night-before scheduling implemented (2026-09-17):**
+
+The pipeline now uses the official PGA TOUR event start date as the forecast
+deadline anchor, removing the tee-time dependency:
+
+- `official_start_at_utc` field added to EventControl;
+- parsed from the PGA TOUR schedule page `displayDate` field;
+- when tee times are unavailable, the forecast runs at T-22 hours before the
+  official start date (fixed night-before offset);
+- when tee times are available, the original T-12 behavior is preserved;
+- the pre-start guard still prevents any post-tee forecast;
+- `lookup_tournament_id` now returns `(tournament_id, slug, display_date, timezone)`;
+- `parse_display_date_start` extracts the start date from display strings like
+  `"Sep 17 - 20, 2026"` -> `"2026-09-17"`.
+
+**Biltmore Championship Asheville status:**
+
+- event: `biltmore_championship_asheville_2026` (official R2026557);
+- Round 1 started 2026-09-17; the automated collector fetched the field but no
+  pre-tournament forecast archive was created (competition already underway);
+- with autonomy deployed 2026-09-18, the next timer run closes Biltmore as
+  `deadline_missed` (its window passed) and advances to the next eligible event
+  automatically; the earlier `unknown_player_id` block is resolved for future
+  ordinary events because source IDs now resolve by canonical name.
 
 **The first genuinely prospective frozen forecast was archived before the first
 tee and is the project's primary prospective artifact:**
 
-- the Windows-scheduled `GolfWeeklyForecast` task archived the 2026 TOUR
+- the retired Windows-scheduled `GolfWeeklyForecast` task archived the 2026 TOUR
   Championship bundle at 2026-08-27T04:00:02Z (12:00 AM EDT Thursday), about
   11 hours before the verified 2026-08-27T15:00:00Z first tee;
 - `pre_start_verified=true`; `verify-forecast-archive` passes on both hosts;
@@ -85,6 +164,24 @@ tee and is the project's primary prospective artifact:**
 - the Mac's local weekly state for this event reads `deadline_missed` because
   its loop ran after the tee passed; that is a local state artifact only. The
   Windows archived bundle is the record (per the archive-of-record decision).
+
+**That forecast was graded on 2026-09-01 without retuning:**
+
+- preserved CBS final leaderboard:
+  `data/raw/prospective_results/tour_championship_2026/`;
+- grade artifacts:
+  `data/interim/reports/prospective_forecast_grades/tour_championship_2026/`;
+- Scottie Scheffler had the highest forecast winner probability (17.065%) and
+  won the event;
+- J.J. Spaun was excluded under the established withdrawal rule (`WD`, zero
+  rounds), leaving 29 graded players for each placement target;
+- model Brier scores were 0.1967 top-20, 0.2100 top-10, 0.2331 top-5, and
+  0.0247 winner. All beat the same-event structural baseline, by +0.0178,
+  +0.0160, +0.0246, and +0.0086 respectively;
+- all four scores were worse than the historical rolling aggregate, which is
+  unsurprising for one event and is not a retuning trigger. A seven-way tie for
+  fourth produced 10 top-5 outcomes versus 5.511 expected;
+- `make_cut` was not graded. The frozen 365/8/20 incumbent remains unchanged.
 
 **Next event review completed 2026-08-28:** the loop had been exiting 10
 (`blocked`) every two hours since the archive because the next CBS-discovered
@@ -109,8 +206,11 @@ review and a new registry row:
   Bovada market availability before 2026-09-10; if markets never appear, flip
   `include` to 0 so the loop skips ahead.
 
-Both hosts now select the Biltmore Championship Asheville and wait quietly in
-`awaiting_field` (exit 0) until reviewed official field evidence is imported.
+The Mac and Azure scheduler select Biltmore and wait quietly in `awaiting_field`
+(exit 0) until reviewed official field and tee-time evidence is imported. As of
+2026-09-16, no Biltmore forecast archive exists. The private Discord webhook is
+configured on Azure and its endpoint has been verified, but no historical board
+was posted as a smoke test.
 
 Preserve that forecast bundle unchanged for later grading. Keep sportsbook
 prices outside the performance computation, and do not use a retrospective
@@ -119,11 +219,13 @@ replay as prospective evidence. Do not modify the frozen strength parameters
 
 ## Git and Workspace State
 
-As of 2026-08-21 the repository has its first commits pushed to a remote:
+The repository has 11 commits on `main`, all pushed to the remote. Current
+forecast-board, grading, and documentation changes remain uncommitted in the
+working tree, including the automated PGA TOUR collector:
 
 ```text
 origin  https://github.com/colemason6524/golf_props.git (fetch/push)
-main    origin/main  (9 commits, no force pushes)
+main    origin/main  (11 commits, no force pushes)
 ```
 
 Commits in order:
@@ -137,25 +239,27 @@ Commits in order:
 7. `Ignore generated task logs on Windows`
 8. `Ignore editable-install egg-info artifacts`
 9. `Add weekly frozen forecast automation (discovery, evidence, identity, archive)`
+10. `Review and register Biltmore Championship Asheville as next forecast event`
+11. `Record verified first tee and forecast-ready state for TOUR Championship`
 
-The repo is mirrored to the Windows Task Scheduler host at
-`C:\Users\muski\golf_props` (see `docs/windows_deployment.md`). Windows runs
-the same test suite and has the frozen manifest, canonical history, and
-round-performance features with verified identical hashes. A generic recurring
-`GolfWeeklyForecast` task runs every two hours; the one-shot TOUR Championship
-fallback task was retired on 2026-08-25 (placeholder tee timestamp, superseded
-by the generic loop).
+The Windows Task Scheduler host is retired. The Mac is now the durable research
+and bulk-data workspace; the external drive is the additional archive copy. A
+small Azure Linux VM at `/home/azureuser/golf_props` is the scheduler only (see
+`docs/azure_deployment.md`): user-level systemd timers run the generic weekly
+forecast every two hours and the limited Bovada collector on its existing
+weekday schedule. Azure retains only the frozen operational inputs and current
+operational artifacts, which must be copied back to the Mac periodically.
 
 Large generated/research data under `data/raw`, `data/processed`, and
 `data/interim` is intentionally ignored by `.gitignore`, but it is essential
-local research state and is mirrored between hosts (Mac -> Windows for model
-inputs, Windows -> Mac via the pull-back routine for generated artifacts). Do
-not `git clean`, reset, delete, or revert files.
+local research state. The Mac and external drive are the durable copies; copy
+Azure-generated operational artifacts back to the Mac periodically without a
+destructive sync. Do not `git clean`, reset, delete, or revert files.
 
-The latest verified test result at handoff refresh:
+The latest verified test result at this refresh:
 
 ```text
-167 passed
+229 passed
 ```
 
 ## Project Principles and Non-Negotiable Rules
@@ -285,6 +389,10 @@ not block prospective performance validation.
 ### Ingestion and normalization
 
 - `src/golf_props/ingestion/cbs_results.py`: CBS completed-event collection.
+- `src/golf_props/ingestion/pga_tour_collector.py`: automated PGA TOUR field and
+  tee-time collection (parses `__NEXT_DATA__` JSON from field pages and tee-time
+  HTML; resolves tournament IDs from the schedule page; writes evidence compatible
+  with the existing manual ingestion flow).
 - `src/golf_props/normalization/bootstrap_results.py`: simple bootstrap CSV.
 - `src/golf_props/normalization/espn_results.py`: historical ESPN/Kaggle TSV.
 - `src/golf_props/normalization/cbs_results.py`: CBS normalization.
@@ -332,10 +440,25 @@ not block prospective performance validation.
 
 ### Operational pipelines
 
+- `src/golf_props/events/auto_structure.py`: autonomous event-structure policy.
+  Registry row is an override; otherwise ordinary stroke-play events are
+  auto-included with a logged default, FedExCup Playoff events are auto-included
+  under the explicit `no_cut` rule (`structure_source: auto_playoff_no_cut`;
+  starting-stroke adjustments are not modelled), and team/Q-school/pro-am formats
+  are excluded.
 - `src/golf_props/pipelines/current_event_simulation.py`: manifest-driven,
   hash-verified frozen current-event strength, simulation, and reporting.
 - `src/golf_props/pipelines/dk_current_value.py`: legacy DraftKings Predictions
   workflow; not the validated simulator path.
+- `src/golf_props/notifications/discord.py`: verified forecast-only private board
+  publisher with atomic delivery artifacts and duplicate-send protection. Urgent
+  operational alerts share the same main channel through `send_ops_alert`
+  (`GOLF_PROPS_DISCORD_WEBHOOK_URL`) and are prefixed with `[URGENT]`; routine
+  processing stays silent.
+- `src/golf_props/pipelines/weekly_forecast.py`: orchestrator. Autonomous
+  rollover (closes a passed window and advances), auto structure, source-namespace
+  identity resolution, optional tee-time date fallback with provenance, atomic
+  immutable archive, post-archive board publish, and a `health.json` snapshot.
 
 ### Sportsbook sources
 
@@ -518,11 +641,14 @@ Do not cite those rows as evidence of value or betting edge.
 7. Player-name matching still needs occasional aliases.
 8. Course par, yardage, turf, and shot-profile features are largely unavailable.
 9. Tee times, tee waves, weather, withdrawals, live state, and round/hole stats
-   are not modeled.
+   are not modeled. Tee-time collection is now automated from the PGA TOUR
+   website, but tee-wave adjustments and weather effects are not yet modeled.
 10. Multi-course and nonstandard event formats are not handled by the simulator.
-11. Current results stop before the model freeze date; no genuinely prospective
-    tournament has yet been scored with the frozen manifest.
-12. No repository commit exists, so project history is not protected by Git.
+11. Frozen model history stops before the model freeze date. One genuinely
+    prospective tournament has now been scored, which remains far too little
+    evidence for calibration or model-change conclusions.
+12. The repository has 11 commits on `main`; current forecast-board and grading
+    work is present in the working tree and has not yet been committed.
 13. **Playoff event structure:** FedEx St. Jude / BMW / TOUR Championship are
     no-cut. `predict-current-event` now supports an explicit `--cut-rule`
     (`top_n_and_ties` default or `no_cut`) without retuning strength. Under
@@ -530,9 +656,21 @@ Do not cite those rows as evidence of value or betting edge.
 14. Local canonical history may lag the market (`source_data_through=2026-07-11`),
     so late-July / early-August completed rounds may be missing from strength.
 15. Prospective runs require `--event-start-at-utc` (timezone-aware, strictly
-    before run creation time), so the TOUR Championship forecast cannot be
-    backfilled after the first tee on Thursday 2026-08-27. The official field is
-    only final after BMW concludes on 2026-08-23.
+    before run creation time), so a forecast cannot be backfilled after first
+    tee. Biltmore's current field/tee evidence remains absent from the Azure
+    operational state, so no Biltmore archive has been created.
+16. **Fully autonomous event structures (2026-09-18):** ordinary stroke-play
+    events are auto-included, FedExCup Playoff events are auto-included under the
+    explicit `no_cut` rule (`structure_source: auto_playoff_no_cut`), and
+    team/Q-school/pro-am formats are excluded rather than modelled. No per-event
+    registry row is required. Limitation: starting-stroke / staggered-start
+    adjustments on playoff events are not modelled; frozen 365/8/20 strength is
+    unchanged.
+17. **Identity fallback (approved 2026-09-18):** a field player with no canonical
+    name match is admitted via the documented tour-prior fallback (blank id) so a
+    single longshot cannot block an event; ambiguous, id/name-conflict, and
+    unknown-canonical-id cases still fail closed. No-history admissions are silent
+    (not actionable); only hard failures alert.
 
 ## Completed Task: Course Identity Crosswalk
 
@@ -613,11 +751,20 @@ archive) is now a generic, idempotent, fail-closed pipeline:
 - `src/golf_props/ingestion/current_event_discovery.py` — preserves the raw CBS
   schedule and selects the next not-yet-started event; CBS is discovery only and
   never supplies timing or structure.
+- `src/golf_props/ingestion/pga_tour_collector.py` — automated PGA TOUR field
+  and tee-time collection. Parses `__NEXT_DATA__` JSON from the official field
+  page to extract players, and parses tee-time HTML for Round 1 tee times.
+  Resolves tournament IDs from the schedule page. Writes evidence compatible
+  with the existing manual ingestion flow. Falls back to manual evidence if
+  automated collection fails. Also extracts the official event start date from
+  the schedule page for night-before scheduling when tee times are unavailable.
 - `src/golf_props/ingestion/current_field.py` — reviewed **official** field
   evidence (source_kind `official` + finality `final`) unlocks the forecast;
-  sportsbook sources are cross-check diagnostics only.
+  sportsbook sources are cross-check diagnostics only. Used as fallback when
+  automated PGA TOUR collection fails.
 - `src/golf_props/ingestion/tee_times.py` — reviewed tee-time evidence with an
-  explicit IANA local timezone derives the earliest Round 1 tee in UTC.
+  explicit IANA local timezone derives the earliest Round 1 tee in UTC. Used as
+  fallback when automated PGA TOUR collection fails.
 - `src/golf_props/events/structure.py` + `config/event_registry.csv` — reviewed
   per-season scope and event-structure decisions; an event with no reviewed row
   is never selected (fails closed).
@@ -631,7 +778,8 @@ archive) is now a generic, idempotent, fail-closed pipeline:
   runs at T-12 hours, and never backfills.
 - `src/golf_props/backtest/forecast_archive.py` — archive hash verification.
 - CLI: `weekly-forecast`, `weekly-forecast-status`, `verify-forecast-archive`,
-  `import-current-field-evidence`, `import-current-tee-time-evidence`.
+  `import-current-field-evidence`, `import-current-tee-time-evidence`,
+  `publish-forecast-board`.
 
 Exit codes: 0 waiting/archived, 10 blocked, 11 deadline missed, 12 identity
 blocked, 20 hard error. State lives in `data/interim/weekly/` (`status.json`,
@@ -649,51 +797,98 @@ hosts moved to `awaiting_field` for it (exit 0, no operator noise). The
 scheduled task's exit code 10 (`blocked`) between 2026-08-27 and 2026-08-28 was
 the designed unreviewed-next-event signal, not a malfunction.
 
+The automated PGA TOUR collector was deployed on 2026-09-17. The pipeline now
+attempts automated field/tee-time collection before falling back to manual
+evidence import. Tee times are optional: when unavailable, the forecast uses
+the official PGA TOUR event start date with a 22-hour night-before offset. The
+collector successfully fetched 132 players for the Biltmore Championship
+(tournament ID `R2026557`) on Azure, but the event was already in progress
+(Round 1 started Sep 17), so no pre-tournament forecast archive was created. The
+automated collection path catches errors and falls through to the existing manual
+flow, so no operator intervention is required for normal operation.
+
+Discord output was prepared on 2026-09-17:
+- Archive path now makes tee-time artifacts optional;
+- Discord board timing language updated from "First tee" to "Competition timing";
+- Timing source recorded in archive and displayed on Discord board;
+- Product contract, README, and deployment docs updated;
+- Regression tests added for fallback timing;
+- 209 tests pass on Mac; 201 tests pass on Azure's deployed test set.
+
+The 2026-09-18 Azure run exposed and corrected a deployment-only keyword
+mismatch in `weekly_forecast.py`: automated field and tee-time persistence now
+passes the collector's required `raw_events_root` argument. Regression tests
+cover both automated persistence paths. After redeployment, the controlled
+Azure run progressed past collection and timing to the existing identity gate;
+Biltmore remains blocked because the current canonical player table does not
+recognize the PGA TOUR IDs. No forecast or Discord board was produced.
+
 Frozen-input policy: the weekly pipeline does **not** refresh historical
 performance. It continues to use the frozen manifest's hashed inputs
 (`source_data_through=2026-07-11`). Any append-only historical refresh is a
 separate scientific decision that must not be slipped into operational
 automation.
 
-## Exact Next Task: Grade the First Prospective Forecast
+## Exact Next Task: Continue Prospective Evidence
 
-### 1. After the 2026 TOUR Championship concludes (Sunday 2026-08-30 / Monday 2026-08-31)
+The loop is now autonomous for ordinary PGA Tour events. Implemented 2026-09-18:
 
-The archive-of-record is
-`data/interim/reports/prospective_forecasts/tour_championship_2026/`
-(verified on both hosts; `predictions.csv` SHA-256
-`412f99b501d33d769c12d1f4d257405a7177d55d0925d1daaa1d72e034276fcb`).
+- **Auto-rollover:** a passed window closes itself (`deadline_missed`) and the
+  scheduler advances to the next eligible event; finished tournaments no longer
+  pin the loop or require a manual pointer clear.
+- **Auto-structure:** ordinary stroke-play events are included with a logged
+  default; the registry is now an override table. Team/Q-school/pro-am formats
+  are excluded, and FedExCup Playoff events are auto-included under the explicit
+  `no_cut` rule (starting-stroke adjustments are not modelled), consistent with
+  the no-cut guardrail.
+- **Source-namespace identity:** PGA TOUR IDs are no longer treated as canonical
+  IDs; players resolve by normalized name to canonical IDs. This is what blocked
+  the whole Biltmore field (`unknown_player_id`); it is now a naming resolution
+  step rather than a hard block for source IDs.
+- **Ops/health:** only actionable failures (hard errors, missed deadlines,
+  ambiguous identities, archive/forecast refusal, delivery failures) alert on the
+  main channel with a `[URGENT]` prefix; routine processing stays silent. The
+  board channel carries both boards and rare urgent alerts. `health.json` mirrors
+  operator state.
 
-1. Collect official final results for the event (CBS collector is the
-   established completed-results source; preserve the raw page first).
-2. Grade the frozen `predictions.csv` against actual outcomes for
-   top-20/top-10/top-5/winner: Brier/log-loss per target plus calibration
-   versus the rolling expectations. `make_cut` is structural (1.0) under
-   no-cut and is NOT a graded target.
-3. Record the outcome without retuning. Win or lose, the frozen 365/8/20
-   incumbent stays unchanged.
-4. Update this handoff and the research narrative with the graded result.
+Biltmore is past its window (Round 1 started 2026-09-17); no forecast is
+manufactured for it. On the next timer run the scheduler advances on its own.
 
-### 2. Before 2026-09-10: confirm Bovada markets exist for Biltmore
+**Approved identity policy (operator decision 2026-09-18):** a field player whose
+name has no canonical match (`UNMATCHED`) is now **admitted** with a blank id so
+the frozen simulator applies its documented tour-prior fallback; one longshot can
+no longer block an otherwise-clean event. Ambiguous names, an id/name conflict, or
+an unknown *canonical* id still fail closed. Admissions emit an ops-channel alert
+(`identity_unmatched_admitted` is surfaced in status/health). This matches the
+already-approved `predict-current-event` behavior (e.g., Wyndham's 6 unmatched
+tour-prior fallbacks); it is a policy alignment, not a new model input path.
 
-The Biltmore Championship Asheville registry row is `include=1`
-provisionally. Run `collect-bovada-golf-odds` (or check the feed directly)
-before 2026-09-10:
+**Approved structure policy (operator decision 2026-09-18):** FedExCup Playoff
+events are **auto-included** under the explicit `no_cut` rule
+(`structure_source: auto_playoff_no_cut`); starting-stroke adjustments are not
+modelled and frozen 365/8/20 strength is untouched. Team/Q-school/pro-am stay
+excluded. All events therefore run fully autonomously with no per-event human
+step.
 
-- if Biltmore markets appear, leave the row as is;
-- if they never appear, flip `include` to 0 (and note why) so the loop skips
-  to the next main event.
+**Alert policy (operator decision 2026-09-18):** operational alerts now go to the
+main forecast channel with a `[URGENT]` prefix (no second webhook). Only
+actionable failures alert: discovery/hard errors, missed deadlines, ambiguous or
+conflicting identities, archive/forecast refusal, and Discord delivery failures.
+Routine processing — ordinary events, auto playoff inclusion, exclusions, and
+no-history tour-prior admissions — stays silent, so no regular check-in is
+required.
 
-### 3. Mid-September: arm the Biltmore forecast
+For the next eligible event:
 
-When the official field and tee times post (official competitive dates
-2026-09-17 to 2026-09-20):
-
-1. preserve official field evidence (`import-current-field-evidence`,
-   `source_kind=official`, `finality=final`);
-2. preserve official tee times (`import-current-tee-time-evidence`,
-   `--local-timezone America/New_York`);
-3. the loop archives at T-12 hours automatically (Windows WakeToRun enabled).
+1. the automated collector fetches the official field and (optionally) tee times
+   when the weekly pipeline runs (no manual step);
+2. if tee times are unavailable, `official_start_at_utc - 22h` is the deadline;
+3. identities resolve by canonical name; ambiguous/conflicting names block and
+   alert, while no-history names are admitted via tour prior silently;
+4. the frozen forecast archives immutably before the first tee;
+5. the verified archive publishes to the forecast-only Discord board automatically;
+6. after completion, preserve final CBS results and run `grade-forecast` without
+   retuning 365/8/20.
 
 ### Standing protocol (unchanged)
 
@@ -869,6 +1064,8 @@ verify the non-promotion decision after course identity is repaired.
 - Frozen current-event output contract:
   `strengths.csv`, `predictions.csv`, `report.md`, and `run_manifest.json`
   under the selected event output directory
+- First prospective grade:
+  `data/interim/reports/prospective_forecast_grades/tour_championship_2026/`
 - Wyndham 2026 retrospective dry-run:
   `data/interim/reports/wyndham_championship_2026_frozen_simulation/`
   (labeled `retrospective_replay`; not prospective evidence)
@@ -881,8 +1078,14 @@ verify the non-promotion decision after course identity is repaired.
   `data/interim/reports/course_challenger_validation/challenger_manifest.json`
 - Bovada collector report:
   `data/interim/reports/bovada_golf_odds_collection/report.md`
-- Windows deployment:
-  `docs/windows_deployment.md`
+- Azure deployment:
+  `docs/azure_deployment.md`
+- Product contract:
+  `docs/PRODUCT_CONTRACT.md`
+- Research hypothesis ledger:
+  `docs/research/hypothesis_ledger.md`
+- Private forecast delivery artifacts:
+  `data/interim/reports/forecast_delivery/<event_key>/`
 - Git remote:
   `https://github.com/colemason6524/golf_props.git` (`origin`)
 
@@ -935,15 +1138,17 @@ local machine rather than inferred from repository status.
    remote sync is wanted; preserve all untracked files.
 4. Run `PYTHONPATH=src python3 -m pytest`.
 5. Inspect the frozen manifests and confirm generated data still exists.
-6. Resolve the playoff no-cut / event-structure question before forecasting
-   playoff events. Explicit `--cut-rule no_cut` support is now implemented;
-   strength parameters are unchanged.
-7. The generic `weekly-forecast` loop is live and fail-closed. It waits for
-   reviewed official field/tee-time evidence, so the operator must preserve
-   that evidence after BMW concludes (2026-08-23) and after tee times post. Add
-   each next event to `config/event_registry.csv` and unresolved names to
-   `config/player_aliases.csv`; the pipeline blocks rather than guessing. Run
-   `weekly-forecast-status` to see why it is waiting.
+6. Playoff event structure is resolved: FedExCup Playoff events are
+   auto-included under the explicit `no_cut` rule (starting-stroke adjustments
+   not modelled); strength parameters are unchanged. No per-event registry row is
+   required.
+7. The generic `weekly-forecast` loop is live and fail-closed. It now attempts
+   automated PGA TOUR field/tee-time collection before falling back to manual
+   evidence import. Tee times are optional: when unavailable, the forecast uses
+   the official PGA TOUR event start date with a 22-hour night-before offset.
+   Discord output is ready and will publish automatically after archiving. The
+   pipeline blocks rather than guessing. Run `weekly-forecast-status` to see why
+   it is waiting.
 8. Update this handoff, the research narrative, and the continuation prompt
    whenever a decision, experiment, source status, frozen parameter, cutoff, or
    next task changes.

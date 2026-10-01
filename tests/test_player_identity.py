@@ -147,3 +147,58 @@ def test_matched_no_prior_allowed():
     )
     assert resolved[0].match_status == MATCHED_NO_PRIOR
     assert audit["ok"] is True
+
+
+def test_source_namespace_id_resolves_by_name():
+    # A PGA TOUR id is not a canonical id: it must not raise unknown_player_id.
+    resolved, audit = resolve_field_identities(
+        [
+            {
+                "player_name": "Rory McIlroy",
+                "player_id": "TOURID_777",
+                "entry_status": "confirmed",
+            }
+        ],
+        PLAYERS,
+        aliases_path=ALIASES,
+        prior_player_ids={"TOURID_777"},
+        source_id_namespace="pga_tour",
+    )
+    assert resolved[0].player_id == "p4"
+    assert resolved[0].match_status == MATCHED_NO_PRIOR
+    assert audit["ok"] is True
+
+
+def test_source_namespace_unknown_name_still_unmatched():
+    resolved, audit = resolve_field_identities(
+        [
+            {
+                "player_name": "Nobody Here",
+                "player_id": "TOURID_555",
+                "entry_status": "confirmed",
+            }
+        ],
+        PLAYERS,
+        aliases_path=ALIASES,
+        prior_player_ids=set(),
+        source_id_namespace="pga_tour",
+    )
+    assert resolved[0].match_status == UNMATCHED
+    assert audit["ok"] is False
+
+
+def test_source_namespace_preserves_source_id_in_note():
+    resolved, _ = resolve_field_identities(
+        [
+            {
+                "player_name": "Rory McIlroy",
+                "player_id": "TOURID_777",
+                "entry_status": "confirmed",
+            }
+        ],
+        PLAYERS,
+        aliases_path=ALIASES,
+        prior_player_ids={"p4"},
+        source_id_namespace="pga_tour",
+    )
+    assert "source[pga_tour]_id=TOURID_777" in resolved[0].note

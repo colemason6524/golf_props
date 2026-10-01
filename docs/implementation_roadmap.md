@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Last updated: 2026-08-10
+Last updated: 2026-09-16
 
 ## North Star
 
@@ -485,17 +485,14 @@ strictly after run creation, so a forecast cannot be backfilled after tee time.
 Frozen 365/8/20 strength parameters are unchanged; `make_cut` is structural
 (1.0) under `no_cut` and is not an empirical target for such events.
 
-St. Jude (2026-08-13) and BMW (2026-08-20) are no longer prospectively eligible.
-The next genuinely eligible event is the 2026 TOUR Championship (competitive
-rounds 2026-08-27 to 2026-08-30 at East Lake): 30 players, no cut, 72-hole
-stroke play, all players at even par. Its official top-30 field is final only
-after BMW concludes on 2026-08-23. Preserve that field, resolve identities,
-verify the first-tee timestamp, and run
-`predict-current-event --cut-rule no_cut --event-start-at-utc <verified>`
-strictly before the Thursday 2026-08-27 first tee. Preserve any valid
-prospective run unchanged for later grading. Sportsbook comparison remains a
-separate later layer and must not turn structural-baseline evidence into a
-betting-edge claim.
+The 2026 TOUR Championship became the first genuinely prospective frozen
+forecast: its 30-player no-cut bundle was archived before the verified first
+tee and graded on 2026-09-01 without retuning. Scottie Scheffler was the
+highest-probability winner and won. The model beat the same-event structural
+baseline on top-20, top-10, top-5, and winner Brier, but all absolute scores
+were worse than historical rolling aggregates. One event is not enough to
+estimate stable calibration or claim a betting edge. Continue the same archive,
+grade, and no-retune loop for Biltmore if its Bovada markets are confirmed.
 
 The original performance-first modeling priorities were:
 
@@ -505,10 +502,10 @@ The original performance-first modeling priorities were:
 4. strict walk-forward calibration and ranking evaluation,
 5. performance-only weekly reports with uncertainty and data-quality warnings.
 
-Items 1–4 and the canonical performance-data audit are implemented. Item 5 is
-partially represented by simulation reports but is not yet an integrated weekly
-workflow. Bovada timestamp history remains valuable because prices are
-perishable, but it should not block the course identity repair.
+Items 1–5 and the canonical performance-data audit are implemented, including a
+generic fail-closed weekly forecast archive and post-event grader. Bovada
+timestamp history remains valuable because prices are perishable, but it should
+not block repeated prospective performance validation.
 
 Performance-model implementation update:
 
@@ -531,6 +528,11 @@ Performance-model implementation update:
   are implemented
 - manifest-driven current-event strength and joint-field simulation are
   implemented with hash verification and explicit prospective classification
+- immutable prospective archive verification and CBS-result grading are
+  implemented; grading artifacts are hashed outside the forecast archive
+- forecast-only private Discord publication is implemented with archive
+  verification, atomic delivery artifacts, duplicate protection, and an optional
+  post-archive Azure hook; the webhook is not part of source control
 
 The first full-data smoke backtest used five recent events and 1,000 simulations
 per event. A subsequent selection run compared nine configurations over 20

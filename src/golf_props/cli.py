@@ -27,6 +27,10 @@ from golf_props.backtest.forecast_archive import (
     ForecastArchiveError,
     verify_forecast_archive,
 )
+from golf_props.backtest.forecast_grading import (
+    ForecastGradingError,
+    grade_forecast,
+)
 from golf_props.backtest.value_report import build_value_report
 from golf_props.config import PROJECT_ROOT, project_paths
 from golf_props.features.current_event import build_current_event_features
@@ -40,6 +44,7 @@ from golf_props.ingestion.current_field import (
     import_field_evidence,
 )
 from golf_props.ingestion.tee_times import import_tee_time_evidence
+from golf_props.notifications.discord import DiscordBoardError, publish_board
 from golf_props.normalization.cbs_results import normalize_directory as normalize_cbs_directory
 from golf_props.normalization.course_identity import audit_course_aliases
 from golf_props.normalization.merge_results import merge_directories
@@ -271,6 +276,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Verify a prospective forecast archive hash manifest.",
     )
     verify_archive_parser.add_argument("--archive-dir", required=True, type=Path)
+
+    grade_forecast_parser = subparsers.add_parser(
+        "grade-forecast",
+        help="Grade an immutable prospective forecast from preserved CBS results.",
+    )
+    grade_forecast_parser.add_argument("--archive-dir", required=True, type=Path)
+    grade_forecast_parser.add_argument("--results-page", required=True, type=Path)
+    grade_forecast_parser.add_argument("--rolling-metrics", required=True, type=Path)
+    grade_forecast_parser.add_argument("--output-dir", required=True, type=Path)
+    grade_forecast_parser.add_argument("--results-url", default="")
+
+    publish_board_parser = subparsers.add_parser(
+        "publish-forecast-board",
+        help="Publish a verified prospective forecast board to Discord.",
+    )
+    publish_board_parser.add_argument("--archive-dir", required=True, type=Path)
+    publish_board_parser.add_argument("--output-dir", type=Path)
+    publish_board_parser.add_argument("--dry-run", action="store_true")
+    publish_board_parser.add_argument("--resend", action="store_true")
 
     import_field_parser = subparsers.add_parser(
         "import-current-field-evidence",
@@ -969,6 +993,41 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for problem in result["problems"]:
             print(f"archive_problem={problem}")
         return 0 if result["verified"] else 1
+    if args.command == "grade-forecast":
+        try:
+            result = grade_forecast(
+                args.archive_dir,
+                args.results_page,
+                args.rolling_metrics,
+                args.output_dir,
+                results_url=args.results_url,
+            )
+        except (ForecastGradingError, ForecastArchiveError) as exc:
+            print(f"Forecast grading failed: {exc}", file=sys.stderr)
+            return 1
+        print(f"graded_predictions={result['graded_predictions_path']}")
+        print(f"grading_metrics={result['metrics_path']}")
+        print(f"grading_report={result['report_path']}")
+        print(f"grading_manifest={result['manifest_path']}")
+        return 0
+    if args.command == "publish-forecast-board":
+        output_dir = args.output_dir or (
+            PROJECT_ROOT / "data/interim/reports/forecast_delivery" / args.archive_dir.name
+        )
+        try:
+            result = publish_board(
+                args.archive_dir,
+                output_dir,
+                dry_run=args.dry_run,
+                resend=args.resend,
+            )
+        except DiscordBoardError as exc:
+            print(f"Forecast board publication failed: {exc}", file=sys.stderr)
+            return 1
+        print(f"forecast_board={result['board']}")
+        print(f"discord_payload={result['payload']}")
+        print(f"delivery_receipt={result['receipt']}")
+        return 0 if result["receipt_data"]["status"] != "failed" else 1
     if args.command == "import-current-field-evidence":
         evidence = import_field_evidence(
             args.event_key,

@@ -18,26 +18,40 @@ STATE_FORECAST_READY = "forecast_ready"
 STATE_FORECAST_ARCHIVED = "forecast_archived"
 STATE_BLOCKED = "blocked"
 STATE_DEADLINE_MISSED = "deadline_missed"
+STATE_SKIPPED = "skipped_without_forecast"
 
-TERMINAL_STATES = {STATE_FORECAST_ARCHIVED, STATE_DEADLINE_MISSED}
+TERMINAL_STATES = {STATE_FORECAST_ARCHIVED, STATE_DEADLINE_MISSED, STATE_SKIPPED}
 
 ALLOWED_TRANSITIONS: dict[str, set[str]] = {
-    STATE_DISCOVERED: {STATE_AWAITING_FIELD, STATE_AWAITING_TEE_TIMES, STATE_BLOCKED},
-    STATE_AWAITING_FIELD: {STATE_AWAITING_TEE_TIMES, STATE_BLOCKED, STATE_DEADLINE_MISSED},
+    STATE_DISCOVERED: {
+        STATE_AWAITING_FIELD,
+        STATE_AWAITING_TEE_TIMES,
+        STATE_BLOCKED,
+        STATE_SKIPPED,
+    },
+    STATE_AWAITING_FIELD: {
+        STATE_AWAITING_TEE_TIMES,
+        STATE_BLOCKED,
+        STATE_DEADLINE_MISSED,
+        STATE_SKIPPED,
+    },
     STATE_AWAITING_TEE_TIMES: {
         STATE_AWAITING_IDENTITY,
         STATE_BLOCKED,
         STATE_DEADLINE_MISSED,
+        STATE_SKIPPED,
     },
     STATE_AWAITING_IDENTITY: {
         STATE_FORECAST_READY,
         STATE_BLOCKED,
         STATE_DEADLINE_MISSED,
+        STATE_SKIPPED,
     },
     STATE_FORECAST_READY: {
         STATE_FORECAST_ARCHIVED,
         STATE_BLOCKED,
         STATE_DEADLINE_MISSED,
+        STATE_SKIPPED,
     },
     STATE_BLOCKED: {
         STATE_AWAITING_FIELD,
@@ -46,9 +60,11 @@ ALLOWED_TRANSITIONS: dict[str, set[str]] = {
         STATE_FORECAST_READY,
         STATE_FORECAST_ARCHIVED,
         STATE_DEADLINE_MISSED,
+        STATE_SKIPPED,
     },
     STATE_FORECAST_ARCHIVED: set(),
     STATE_DEADLINE_MISSED: set(),
+    STATE_SKIPPED: set(),
 }
 
 
@@ -68,6 +84,8 @@ class EventControl:
     tour: str = "PGA_TOUR_MAIN"
     season: int = 0
     source_event_id: str = ""
+    pga_tour_tournament_id: str = ""
+    official_start_at_utc: Optional[str] = None
     schedule_start_date: str = ""
     schedule_end_date: str = ""
     competitive_start_date: str = ""
@@ -78,6 +96,8 @@ class EventControl:
     forecast_due_at_utc: Optional[str] = None
     state: str = STATE_DISCOVERED
     blocking_reason: str = ""
+    structure_source: str = ""
+    source_id_namespace: str = ""
     created_at_utc: str = ""
     updated_at_utc: str = ""
     field_source: Optional[dict[str, Any]] = None

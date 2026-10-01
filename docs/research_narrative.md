@@ -1,6 +1,6 @@
 # Research Narrative: How We Got Here
 
-Last updated: 2026-08-10
+Last updated: 2026-09-16
 
 This document is the human-readable story of the project: what we were trying
 to learn, what worked, what failed, what the current theory is, and what a new
@@ -32,8 +32,9 @@ are not equal in size.
   rolling validation, frozen incumbent, and a reproducible current-event
   forecast command.
 - We are still **early** on prospective validation and market-edge research:
-  zero genuinely prospective frozen forecasts have been graded, odds history is
-  incomplete, and the frozen simulator is not yet the value-report engine.
+  one genuinely prospective frozen forecast has been graded, the next event has
+  not produced an archive, odds history is incomplete, and the frozen simulator
+  is not yet the value-report engine.
 
 The binding current gap is **prospective evidence**, not more model complexity
 and not sportsbook access.
@@ -155,9 +156,68 @@ Deliberate boundary: the weekly loop does **not** refresh historical performance
 The frozen manifest's hashed inputs remain authoritative; an append-only refresh
 is a separate scientific decision, not an operational one.
 
+### Phase J — First prospective grade
+
+The archived 2026 TOUR Championship forecast was graded on 2026-09-01 from a
+preserved CBS final leaderboard, with no retuning and no `make_cut` score. J.J.
+Spaun's zero-round `WD` was excluded under the established historical grading
+rule, leaving 29 players per target. Scottie Scheffler was both the model's
+highest-probability winner (17.065%) and the actual winner.
+
+The model beat the event's structural baseline on Brier for top-20 (+0.0178),
+top-10 (+0.0160), top-5 (+0.0246), and winner (+0.0086). Absolute Brier and log
+loss were worse than historical rolling aggregates. A seven-way tie for fourth
+created 10 top-5 outcomes, making this event unusually harsh for absolute
+top-5 calibration despite the model beating baseline. One event is evidence
+that the prospective loop works, not enough evidence to judge stable
+calibration, retune, or claim a betting edge.
+
+### Phase K — Private forecast board
+
+The forecast-only Discord board is implemented and deployed to Azure. It accepts
+only verified prospective archives, writes an exact payload and delivery receipt
+outside the immutable archive, suppresses mentions, and refuses duplicate sends.
+The webhook is configured and endpoint-verified. No historical TOUR board was
+posted as a smoke test; the next newly archived prospective event will publish
+automatically after archive creation.
+
+### Phase L — Autonomous operation
+
+The operator goal became explicit: after setup, do nothing and still receive a
+pre-tee board every week. The loop was made autonomous for ordinary events:
+
+- the scheduler advances on its own when an event's window passes (no more manual
+  pointer clears; a blocked/finished event cannot pin the loop);
+- ordinary stroke-play events are auto-included with a logged default structure,
+  so `config/event_registry.csv` becomes an override/exception table rather than a
+  required weekly input;
+- team, Q-school, and pro-am formats are excluded, and FedExCup Playoff events are
+  auto-included under the explicit `no_cut` rule rather than defaulted to a top-65
+  cut, because the official schedule only reliably exposes a `PLAYOFF` flag, not
+  per-event cut rules — guessing a top-65 cut onto a no-cut or staggered event is
+  exactly the guardrail we refuse to cross;
+- PGA TOUR field IDs are treated as a source namespace, not canonical IDs, so a
+  full field no longer blocks on `unknown_player_id`; players resolve by canonical
+  name;
+- operational alerts were split onto a separate Discord channel so the board
+  channel stays forecast-only, and a `health.json` snapshot exposes scheduler
+  state.
+
+The honest limit was the fail-closed identity gate: a field player with no
+canonical name match still blocked an event. The operator approved admitting such
+players through the documented tour-prior fallback (blank id), so a single longshot
+no longer stalls an otherwise-clean ordinary event, while ambiguous or conflicting
+identities still fail closed. The operator then removed the last human surface:
+FedExCup Playoff events are auto-included under the explicit `no_cut` rule
+(starting-stroke adjustments are not modelled) instead of waiting for a reviewed
+structure row. Alerting was also simplified: urgent, actionable failures post to
+the main channel with a `[URGENT]` prefix, and routine processing is silent, so no
+weekly check-in is needed. Net: ordinary and playoff weekly events are now fully
+hands-off.
+
 ## Current Theory
 
-The working theory of the game, as of 2026-08-10:
+The working theory of the game, as of 2026-09-16:
 
 1. Pre-tournament relative round form, properly shrunk and jointly simulated,
    is a useful performance prior for cut and placement markets.
@@ -165,11 +225,11 @@ The working theory of the game, as of 2026-08-10:
    promote.
 3. Sportsbook prices should enter only as a comparison layer after performance
    probabilities are frozen.
-4. The scientific bottleneck is now repeated prospective scoring: archive
+4. The scientific bottleneck remains repeated prospective scoring: archive
    forecasts before the event, grade after, and judge calibration/stability
    without retuning.
-5. Until that prospective loop exists, additional model complexity is mostly
-   entertainment.
+5. Until repeated prospective evidence accumulates, additional model complexity
+   is lower priority than operating the archive, grade, and data-quality loop.
 
 ## Successes Worth Keeping
 
@@ -210,8 +270,7 @@ Primary test:
 
 Required protocol:
 
-1. identify an eligible event starting strictly after 2026-08-06 (next: 2026
-   TOUR Championship, competitive rounds 2026-08-27 to 2026-08-30);
+1. identify an eligible event starting strictly after 2026-08-06;
 2. preserve an authoritative independent field before the event (official
    top-30 field is final after BMW concludes on 2026-08-23);
 3. resolve player identities safely;
@@ -225,22 +284,26 @@ Required protocol:
 Bovada timestamp collection may continue in parallel. Odds must not block this
 loop. Legacy heuristic rankings/value reports remain exploratory only.
 
-## Where We Are On The Calendar (2026-08-28)
+## Where We Are On The Calendar (2026-09-16)
 
 - The 2026 TOUR Championship forecast was **archived before the first tee** by
-  the Windows scheduler (2026-08-27T04:00:02Z vs a 15:00:00Z tee,
-  `pre_start_verified`). This is the project's first genuinely prospective
-  frozen bundle; grading follows the final round without retuning.
+  the now-retired Windows scheduler (2026-08-27T04:00:02Z vs a 15:00:00Z tee,
+  `pre_start_verified`) and graded after the final round without retuning. It
+  beat the structural baseline on all four placement Brier scores, but one
+  event is not a stable calibration sample.
 - A state lesson from the same week: after an archive, the loop advances to the
   next event and blocks with exit 10 until a human reviews it. Ten scheduled
   "failures" a day can look like breakage; it is the designed
   operator-review signal. The durable fix is procedural: review the next event
   in the registry promptly after each archive.
-- Next event: **Biltmore Championship Asheville** (official R2026557, The
-  Cliffs at Walnut Cove, 2026-09-17 to 2026-09-20), a FedExCup Fall main
-  event. Reviewed into the registry with the ordinary top-65-and-ties
-  structure; included provisionally pending Bovada market availability
-  (re-check before 2026-09-10). Both hosts wait in `awaiting_field`.
+- Current event: **Biltmore Championship Asheville** (official R2026557, The
+  Cliffs at Walnut Cove, 2026-09-17 to 2026-09-20), a FedExCup Fall main event.
+  It is reviewed into the registry with ordinary top-65-and-ties structure and
+  included. The Mac and Azure scheduler remain in `awaiting_field` because
+  official final field and tee-time evidence have not been imported; no Biltmore
+  forecast archive exists.
+- The Windows host is retired. The Mac is the durable workspace and bulk-data
+  location; the lightweight Azure VM is now the systemd-timer scheduler only.
 - Official-vs-discovery timing differs (CBS says Sep 16-19; official says
   Sep 17-20). Discovery dates group weeks only; competitive timing still comes
   exclusively from reviewed tee-time evidence.
@@ -251,24 +314,22 @@ loop. Legacy heuristic rankings/value reports remain exploratory only.
 These are outward-looking concerns, not settled conclusions. The next agent
 should question them before acting.
 
-### 1. Event-structure mismatch on playoff events (resolved in code, timing tight)
+### 1. Event-structure mismatch on playoff events (resolved in code)
 
 The frozen simulator originally assumed ordinary 72-hole stroke play with a
 **top-65-and-ties cut after two rounds**. FedExCup Playoffs events are
 **no-cut**. An explicit `cut_rule` (`no_cut`) is now implemented without
 changing half-life/priors, and prospective runs require a pre-start timestamp.
 
-The 2026 TOUR Championship is the next eligible event (30 players, no cut, even
-par). Its field is final only after BMW concludes on **2026-08-23**, and the
-forecast must run strictly before the **Thursday 2026-08-27** first tee. Do not
-backfill after tee time and do not invent a cut that does not exist.
+The 2026 TOUR Championship was the first eligible no-cut prospective event and
+was archived and graded. Future playoff events use the same explicit `no_cut`
+rule. Do not backfill after tee time or invent a cut that does not exist.
 
 ### 2. Prospective window can be missed
 
-St. Jude (2026-08-13) and BMW (2026-08-20) were both missed while the event-
-structure question was still open. If the TOUR Championship field cannot be
-preserved and run before Thursday tee times, do not force it; wait for the next
-eligible event and keep the eligibility rule strict.
+St. Jude and BMW were missed while the event-structure question was still open.
+Biltmore is currently waiting for reviewed evidence. If its pre-start window is
+missed, do not force a late forecast; wait for the next eligible event.
 
 ### 3. Field authority
 
@@ -307,9 +368,10 @@ real.
 
 ### 8. Git and data durability
 
-There are still no Git commits. Code/docs are untracked; `data/` is ignored.
-Multi-machine sync and backup are incomplete. Do not `git clean` or delete
-ignored research artifacts.
+The repository has 11 commits on `main`, while current forecast-board and
+grading work remains uncommitted. `data/` is ignored and contains essential
+local research state. Multi-machine sync and backup are incomplete. Do not
+`git clean` or delete ignored research artifacts.
 
 ### 9. Do not reopen settled scientific decisions casually
 

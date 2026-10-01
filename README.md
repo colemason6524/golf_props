@@ -44,6 +44,22 @@ The project borrows the same discipline as the horse racing research repo:
   line collection
 - Research only; no real-money betting automation
 
+## Current Operational State
+
+As of 2026-09-18, Azure is the only active scheduler host. Both golf timers are
+active. The weekly loop is autonomous: it discovers the next eligible PGA Tour
+event, auto-classifies ordinary stroke-play structure (with a manual registry
+override for no-cut/team/exotic events), collects the official field, resolves
+players by canonical name even when the source uses different IDs, forecasts on
+the exact tee time or the 22-hour night-before official-date fallback, verifies
+the immutable archive, and publishes the forecast-only Discord board — with no
+per-tournament human step. FedExCup Playoff events are auto-included under the
+explicit `no_cut` rule (starting-stroke adjustments are not modelled); team
+formats are excluded. Biltmore Championship Asheville is past its window; the
+scheduler now advances on its own. The forecast-only Discord publisher and urgent
+operational alerts (posted to the same channel with a `[URGENT]` prefix) are
+deployed. The latest verified test suite contains 226 passing tests.
+
 ## Current Implementation Status
 
 The project is now a runnable Python research prototype, not just docs:
@@ -58,6 +74,9 @@ The project is now a runnable Python research prototype, not just docs:
 - a manifest-driven `predict-current-event` command now verifies frozen inputs,
   locks 365/8/20 parameters, classifies prospective eligibility, and writes a
   reproducible performance-only forecast bundle
+- a fail-closed `grade-forecast` command verifies an immutable prospective
+  archive, grades preserved CBS outcomes outside that archive, excludes
+  no-cut `make_cut`, and records hashed metrics/report artifacts
 - the simulator supports an explicit `no_cut` event-structure rule in addition
   to the ordinary `top_n_and_ties` cut, and prospective runs require a
   timezone-aware `--event-start-at-utc` timestamp that is strictly before the
@@ -76,6 +95,8 @@ The project is now a runnable Python research prototype, not just docs:
   source after the site changed its rendering/linked-page behavior
 - Bovada PGA odds collection works from a no-browser JSON endpoint and writes
   canonical `odds_snapshots` rows
+- a private, forecast-only Discord board publisher verifies prospective archives,
+  writes delivery receipts, and never includes recommendation language
 
 The latest working Bovada collection path produced:
 
@@ -88,6 +109,18 @@ The latest working Bovada collection path produced:
 The ranking/value artifacts in that list are legacy exploratory outputs built
 from rolling-rate heuristics, not the validated frozen tournament simulator.
 Their displayed edges are not evidence of a betting advantage.
+
+Publish a verified forecast archive to the private golf channel after setting
+`GOLF_PROPS_DISCORD_WEBHOOK_URL` in the protected runtime environment:
+
+```bash
+PYTHONPATH=src python3 -m golf_props.cli publish-forecast-board \
+  --archive-dir data/interim/reports/prospective_forecasts/<event_key> \
+  --dry-run
+```
+
+Remove `--dry-run` only after reviewing the payload. The board contains forecast
+probabilities and provenance only; prices and recommendations are not included.
 
 ## First Markets
 
@@ -281,9 +314,9 @@ effective advancing field size.
 ## Weekly automation
 
 A generic, idempotent, fail-closed loop (`weekly-forecast`) discovers the next
-main PGA Tour event, waits for reviewed official field and tee-time evidence,
-resolves player identities, and archives one immutable frozen forecast before
-the verified first tee:
+main PGA Tour event, collects official field evidence automatically, resolves
+player identities, and archives one immutable frozen forecast before the event
+starts:
 
 ```bash
 PYTHONPATH=src python3 -m golf_props.cli weekly-forecast            # run the loop
@@ -291,19 +324,47 @@ PYTHONPATH=src python3 -m golf_props.cli weekly-forecast --dry-run   # never arc
 PYTHONPATH=src python3 -m golf_props.cli weekly-forecast-status      # why is it waiting?
 PYTHONPATH=src python3 -m golf_props.cli verify-forecast-archive \
   --archive-dir data/interim/reports/prospective_forecasts/<event_key>
+
+PYTHONPATH=src python3 -m golf_props.cli grade-forecast \
+  --archive-dir data/interim/reports/prospective_forecasts/<event_key> \
+  --results-page data/raw/prospective_results/<event_key>/<leaderboard>.html \
+  --rolling-metrics data/interim/reports/rolling_round_simulation_validation/aggregate_metrics.csv \
+  --output-dir data/interim/reports/prospective_forecast_grades/<event_key>
 ```
 
-- Source policy: the CBS schedule is discovery only; event timing and structure
-  come from reviewed evidence (`config/event_registry.csv`, field/tee-time
-  evidence manifests). Sportsbook sources are cross-checks only and never
-  authorize the performance-model field.
-- Timing: earliest Round 1 tee is derived in UTC from reviewed evidence; the
-  forecast runs at T-12 hours, never after the first tee, and never overwrites
-  an archived forecast.
-- Identity: `config/player_aliases.csv` holds reviewed name variants; ambiguous,
-  unknown, or unmatched players block the forecast.
+- Source policy: the CBS schedule is discovery only; field evidence comes from
+  the official PGA TOUR website. Tee times are optional. Sportsbook sources are
+  cross-checks only and never authorize the performance-model field.
+- Structure: ordinary PGA Tour stroke-play events are auto-included with a logged
+  default (`structure_source: auto_default_policy`). `config/event_registry.csv`
+  is now an override/exception table for no-cut, team, Q-school, and pro-am
+  events. FedExCup Playoff events are auto-included under the explicit `no_cut`
+  rule (`structure_source: auto_playoff_no_cut`), so a top-65 cut is never guessed
+  onto a no-cut event; starting-stroke adjustments are not modelled.
+- Identity: source-specific IDs (e.g. PGA TOUR IDs) are treated as a non-canonical
+  namespace and resolved by normalized name to canonical IDs. Ambiguous names,
+  id/name conflicts, and unknown *canonical* IDs block the forecast; a player with
+  no canonical history is admitted via the documented tour-prior fallback (blank
+  id, ops-alerted) so a single longshot never blocks an otherwise-clean event.
+- Timing: the forecast uses exact tee times when available; otherwise it falls
+  back to the official event date with a conservative 22-hour night-before
+  offset. The forecast never runs after the first tee and never overwrites an
+  archived forecast.
+- Rollover: an event whose window passes without a forecast is closed
+  automatically and the scheduler advances to the next eligible event; finished
+  events do not require manually clearing a pointer.
+- Discord: the forecast board and rare urgent operational alerts share the main
+  `GOLF_PROPS_DISCORD_WEBHOOK_URL` channel; urgent messages carry a `[URGENT]`
+  prefix so they are visually distinct from boards. Routine processing (ordinary
+  events, auto playoff inclusion, exclusions, missed longshot admissions) stays
+  silent. No second webhook is required.
 - Exit codes: 0 waiting/archived, 10 blocked, 11 deadline missed, 12 identity
-  blocked, 20 hard error. State lives in `data/interim/weekly/status.json`.
+  blocked, 20 hard error. State lives in `data/interim/weekly/status.json`;
+  operator-facing health in `data/interim/weekly/health.json`.
+
+The Mac is the durable data workspace. The lightweight Azure scheduler uses
+user-level systemd timers and retains only frozen forecast inputs plus current
+operational artifacts. See [docs/azure_deployment.md](docs/azure_deployment.md).
 
 Run an exploratory walk-forward evaluation with:
 
@@ -438,12 +499,14 @@ remains unchanged.
 - Tee-wave, weather, withdrawal-risk, multi-course, and nonstandard event-format
   adjustments are not yet part of the simulation.
 - FedExCup Playoffs events are no-cut. Explicit `no_cut` support exists so the
-  frozen simulator can represent them honestly (30-player TOUR Championship is
-  the next eligible prospective event: 72-hole stroke play, no cut, all players
-  at even par). St. Jude and BMW could not be forecast prospectively because
-  their windows closed before the no-cut path was available.
-- No genuinely prospective frozen forecast has been archived yet as of
-  2026-08-20. Wyndham 2026 was a retrospective engineering replay only.
+  frozen simulator can represent them honestly. The 2026 TOUR Championship was
+  archived and graded as the first prospective no-cut event; St. Jude and BMW
+  were missed before the no-cut path was available.
+- The first genuinely prospective frozen forecast, the 2026 TOUR Championship,
+  was archived before its first tee and graded on 2026-09-01 without retuning.
+  It beat the event structural baseline on all four requested placement Brier
+  scores, but one event is far too little for stable calibration or edge claims.
+  Wyndham 2026 remains a retrospective engineering replay only.
 
 ## Core Question
 
