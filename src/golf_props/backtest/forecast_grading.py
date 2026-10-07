@@ -63,6 +63,22 @@ _FIRST_NAME_EQUIVALENTS = {
 }
 
 
+# Transliteration fold for letters with no NFKD decomposition (applied after
+# casefold(), before NFKD). Casefold already handles U+00D8->U+00F8 and U+00DF->ss.
+_TRANSLITERATION_FOLD = str.maketrans(
+    {
+        "\u00f8": "o",
+        "\u00e6": "ae",
+        "\u0142": "l",
+        "\u0111": "d",
+        "\u00fe": "th",
+        "\u0153": "oe",
+        "\u0127": "h",
+        "\u00f0": "d",
+    }
+)
+
+
 class ForecastGradingError(ValueError):
     """Raised when a prospective forecast cannot be graded safely."""
 
@@ -98,6 +114,7 @@ def _canonical_name_key(value: str) -> str:
     short/long first names (Ben/Benjamin, Zach/Zachary, Kris/Kristoffer).
     """
     text = " ".join(value.casefold().split())
+    text = text.translate(_TRANSLITERATION_FOLD)
     text = re.sub(r"\s*\(a\)\s*$", "", text)
     text = unicodedata.normalize("NFKD", text)
     text = "".join(char for char in text if not unicodedata.combining(char))

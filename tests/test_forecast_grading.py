@@ -6,7 +6,11 @@ from datetime import datetime, timezone
 import pytest
 
 from golf_props.backtest.forecast_archive import REQUIRED_ARCHIVE_FILES
-from golf_props.backtest.forecast_grading import ForecastGradingError, grade_forecast
+from golf_props.backtest.forecast_grading import (
+    ForecastGradingError,
+    _canonical_name_key,
+    grade_forecast,
+)
 from golf_props.cli import main
 
 
@@ -162,3 +166,11 @@ def test_grade_forecast_cli(tmp_path):
 
     assert exit_code == 0
     assert (tmp_path / "grade" / "grading_manifest.json").exists()
+def test_canonical_name_key_transliteration_fold():
+    # Non-decomposing letters (NFKD leaves them intact) must fold to ASCII.
+    assert _canonical_name_key("Rasmus H\u00f8jgaard") == _canonical_name_key("Rasmus Hojgaard")
+    assert _canonical_name_key("RASMUS H\u00d8JGAARD") == _canonical_name_key("Rasmus Hojgaard")
+    assert _canonical_name_key("Mikkel \u00c6ble") == _canonical_name_key("Mikkel Aeble")
+    assert _canonical_name_key("Adrian \u0141akos") == _canonical_name_key("Adrian Lakos")
+    # Regression anchor: decomposing diacritics still fold via NFKD.
+    assert _canonical_name_key("S\u00e9amus Power") == _canonical_name_key("Seamus Power")

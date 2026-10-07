@@ -1,20 +1,21 @@
 {
   "schema_version": 1,
   "project_id": "golf_props",
-  "updated_at": "2026-10-07T03:56:02+00:00",
+  "updated_at": "2026-10-07T04:18:16+00:00",
   "status": "observing",
-  "summary": "Bank of Utah Championship graded (7eef471): integrated canonical-name grader upgrade (intersection grading, 9 real aliases resolved); 107 of 115 forecast players graded, Brier top20 0.1453 (+0.0009 vs structural baseline). Actual winner Austin Smotherman vs forecast favorite Maverick McNealy. Frozen 365/8/20 unchanged; 231 tests pass.",
-  "experiment": "Frozen 365/8/20 incumbent; no retuning. One 107-player graded event is too small for calibration conclusions -- accumulate more genuinely prospective events.",
-  "watching_for": "Next genuinely prospective event grade (Baycurrent Classic Oct 8 awaiting official field); known grader gap: o-slash transliteration (Rasmus Hojgaard) unmatched, 107 graded instead of 108.",
-  "next_action": "Decide on o-slash transliteration fix for forecast_grading.py; let the scheduler advance Baycurrent Classic when official field evidence appears.",
-  "deployed": true,
-  "git_commit": "7eef4715cf025f7fa949ca23b7a1a891ffeab8d4",
+  "summary": "Hojgaard fix: transliteration fold (o->o, ae->ae, l->l, etc) in _canonical_name_key; Bank of Utah re-grade 108 players (was 107), Hojgaard matched; full suite 232 passed.",
+  "experiment": null,
+  "watching_for": null,
+  "next_action": null,
+  "deployed": false,
+  "git_commit": "",
   "check_back": {
     "kind": "grade_event",
-    "label": "After Baycurrent Classic is graded",
+    "label": "after a week of games",
     "target": null,
-    "baseline": "2026-10-07T03:56:02+00:00",
-    "events": []
+    "baseline": "2026-10-07T04:18:16+00:00",
+    "events": [],
+    "target_date": null
   },
   "docs": [
     {
