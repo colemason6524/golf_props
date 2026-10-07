@@ -1,0 +1,77 @@
+{
+  "archive_verification": {
+    "archive_dir": "data/interim/reports/prospective_forecasts/bank_of_utah_championship_2026",
+    "problems": [],
+    "schema_version": 1,
+    "verified": true
+  },
+  "artifact_sha256": {
+    "graded_predictions": "c5b365bb1be3aaf20050c87e3b923e4402083e37c34054834e18a1d0431427e2",
+    "metrics": "2cc3b6e6aff6723f92c9c81d0cc062c4441208fedb8f239eb134c7bee0aff10a",
+    "report": "cf18350ed0b1be8beb4a897169893087640370c4a713fb7bc94af382bbf69d4e"
+  },
+  "created_at_utc": "2026-10-07T03:52:20.545764+00:00",
+  "event_name": "Bank of Utah Championship",
+  "excluded_players": [
+    "Austin Eckroat",
+    "C.T. Pan",
+    "Rasmus Neergaard-Petersen",
+    "Vince Whaley"
+  ],
+  "excluded_targets": [
+    "make_cut"
+  ],
+  "forecast_classification": "prospective_forecast",
+  "forecast_players": 115,
+  "forecast_players_without_results": [
+    "K.H. Lee",
+    "Lanto Griffin",
+    "Rasmus H\u00f8jgaard",
+    "Taylor Pendrith"
+  ],
+  "frozen_parameters_changed": false,
+  "graded_players_per_target": 107,
+  "graded_targets": [
+    "top20",
+    "top10",
+    "top5",
+    "winner"
+  ],
+  "input_sha256": {
+    "archive_manifest": "6c11fd740727355ee1ec64cf3cc1c95e332f7e8184909b68cf3abd5db0222a0f",
+    "predictions": "a4c231725ad49581a4597e3089c1d9333c60e106aaf870e7d93d866eb34dd112",
+    "results_page": "11c4612032b57d2b8bb59f146f3d5c9daa908b773061685f1dbefc0293a2ccb6",
+    "rolling_metrics": "1140b6aa7912266a64155fa560cf2bd6a6a80c76637af686c833f894a2ab6161"
+  },
+  "intersection_players": 111,
+  "name_aliases_applied": [
+    "Ben James (a) <-> Benjamin James",
+    "Bowen Mauss (a) <-> Bowen Mauss",
+    "Bracken, Boston <-> Boston Bracken",
+    "Jackson Koivun (a) <-> Jackson Koivun",
+    "Kihei Akina (a) <-> Kihei Akina",
+    "S\u00e9amus Power <-> Seamus Power",
+    "Ventura, Kristoffer <-> Kris Ventura",
+    "Zach Bauchou <-> Zachary Bauchou",
+    "Zach J. Johnson <-> Zach J Johnson"
+  ],
+  "results_source": {
+    "organization": "CBS Sports",
+    "url": "https://www.cbssports.com/golf/leaderboard/pga-tour/31000135/bank-of-utah-championship/"
+  },
+  "schema_version": 1,
+  "ungraded_results_players": [
+    "Carson Lundell",
+    "Harry Higgs",
+    "Kevin Streelman",
+    "Matt Snyder",
+    "Nick Hardy",
+    "Rasmus Hojgaard",
+    "Rhett Rasmussen",
+    "Seonghyeon An",
+    "Tyler Duncan",
+    "Tyson Shelley",
+    "Will Gordon",
+    "Zach Johnson"
+  ]
+}

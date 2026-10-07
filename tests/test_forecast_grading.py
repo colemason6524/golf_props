@@ -100,10 +100,49 @@ def test_grade_forecast_excludes_make_cut_and_withdrawal(tmp_path):
     assert _sha(archive / "predictions.csv") == result["manifest"]["input_sha256"]["predictions"]
 
 
-def test_grade_forecast_fails_on_field_mismatch(tmp_path):
-    with pytest.raises(ForecastGradingError, match="field mismatch"):
+def test_grade_forecast_grades_intersection(tmp_path):
+    result = grade_forecast(
+        _archive(tmp_path),
+        _results_page(tmp_path, third_name="Other Player"),
+        _rolling_metrics(tmp_path),
+        tmp_path / "grade",
+    )
+
+    assert all(row["graded_players"] == 2 for row in result["metrics"])
+    assert result["manifest"]["forecast_players_without_results"] == ["Gamma Three"]
+    assert result["manifest"]["ungraded_results_players"] == ["Other Player"]
+
+
+def test_grade_forecast_resolves_name_alias(tmp_path):
+    result = grade_forecast(
+        _archive(tmp_path),
+        _results_page(tmp_path, third_name="Three, Gamma"),
+        _rolling_metrics(tmp_path),
+        tmp_path / "grade",
+    )
+
+    assert all(row["graded_players"] == 2 for row in result["metrics"])
+    assert result["manifest"]["forecast_players_without_results"] == []
+    assert result["manifest"]["ungraded_results_players"] == []
+    assert result["manifest"]["name_aliases_applied"] == ["Gamma Three <-> Three, Gamma"]
+
+
+def test_grade_forecast_fails_with_no_common_players(tmp_path):
+    archive = _archive(tmp_path)
+    (archive / "predictions.csv").write_text(
+        (archive / "predictions.csv")
+        .read_text(encoding="utf-8")
+        .replace("Alpha One", "Nobody One")
+        .replace("Beta Two", "Nobody Two")
+        .replace("Gamma Three", "Nobody Three"),
+        encoding="utf-8",
+    )
+    manifest = json.loads((archive / "archive_manifest.json").read_text(encoding="utf-8"))
+    manifest["files"]["predictions.csv"] = _sha(archive / "predictions.csv")
+    (archive / "archive_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ForecastGradingError, match="no players in common"):
         grade_forecast(
-            _archive(tmp_path),
+            archive,
             _results_page(tmp_path, third_name="Other Player"),
             _rolling_metrics(tmp_path),
             tmp_path / "grade",

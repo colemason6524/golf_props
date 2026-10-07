@@ -6,6 +6,8 @@ import csv
 import hashlib
 import json
 import math
+import re
+import unicodedata
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -50,6 +52,16 @@ METRIC_COLUMNS = [
     "log_loss_vs_rolling",
 ]
 
+WITHDRAWN_FINISHES = {"WD", "DNS", "DQ"}
+
+# First-name equivalences across PGA/CBS spellings (applied to the leading
+# token of the canonical key so both variants resolve identically).
+_FIRST_NAME_EQUIVALENTS = {
+    "benjamin": "ben",
+    "kristoffer": "kris",
+    "zachary": "zach",
+}
+
 
 class ForecastGradingError(ValueError):
     """Raised when a prospective forecast cannot be graded safely."""
@@ -75,6 +87,29 @@ def _sha256(path: Path) -> str:
 
 def _name_key(value: str) -> str:
     return " ".join(value.casefold().split())
+
+
+def _canonical_name_key(value: str) -> str:
+    """Resolve one player's name across PGA/CBS spelling variants.
+
+    Handles: case/whitespace, the amateur "(a)" suffix, diacritics
+    (Hojgaard/Højgaard), punctuation ("Zach J. Johnson"/"Zach J Johnson"),
+    "Last, First" ordering ("Ventura, Kristoffer"/"Kris Ventura"), and known
+    short/long first names (Ben/Benjamin, Zach/Zachary, Kris/Kristoffer).
+    """
+    text = " ".join(value.casefold().split())
+    text = re.sub(r"\s*\(a\)\s*$", "", text)
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = text.replace(".", "")
+    if "," in text:
+        parts = [part.strip() for part in text.split(",")]
+        if len(parts) == 2 and parts[0] and parts[1]:
+            text = f"{parts[1]} {parts[0]}"
+    tokens = " ".join(text.split()).split(" ")
+    if tokens:
+        tokens[0] = _FIRST_NAME_EQUIVALENTS.get(tokens[0], tokens[0])
+    return " ".join(tokens)
 
 
 def _clipped(value: float) -> float:
@@ -151,6 +186,9 @@ def _report(
     event_name: str,
     metrics: list[dict[str, object]],
     excluded_names: list[str],
+    forecast_only_names: list[str],
+    ungraded_results_count: int,
+    alias_count: int,
     winner_name: str,
     predicted_winner_name: str,
     results_url: str,
@@ -162,11 +200,14 @@ def _report(
         "",
         "- Classification: genuinely prospective frozen forecast.",
         "- Graded targets: top-20, top-10, top-5, winner.",
-        "- `make_cut` excluded because this was a no-cut event.",
+        "- `make_cut` excluded from graded targets.",
         f"- Results source: CBS Sports ({results_url or 'preserved raw leaderboard page'}).",
         f"- Actual winner: {winner_name}.",
         f"- Highest forecast winner probability: {predicted_winner_name}.",
         f"- Placement rows excluded under the established withdrawal rule: {', '.join(excluded_names) if excluded_names else 'none'}.",
+        f"- Forecast players without a results row (pre-start withdrawals, excluded): {', '.join(forecast_only_names) if forecast_only_names else 'none'}.",
+        f"- Results rows without a matching forecast (late entrants, ignored): {ungraded_results_count}.",
+        f"- Cross-source name aliases applied: {alias_count}.",
         "",
         "## Metrics",
         "",
@@ -205,7 +246,14 @@ def grade_forecast(
     results_url: str = "",
     created_at: Optional[datetime] = None,
 ) -> dict[str, Any]:
-    """Verify and grade one prospective archive without modifying it."""
+    """Verify and grade one prospective archive without modifying it.
+
+    Grades the forecast/results intersection: forecast players with no
+    results row are excluded (pre-start withdrawals), results rows with no
+    forecast are ignored (late entrants), and names are matched across
+    PGA/CBS spelling variants. All exclusions and aliases are recorded in
+    the manifest.
+    """
     verification = verify_forecast_archive(archive_dir)
     if not verification["verified"]:
         raise ForecastGradingError(
@@ -220,40 +268,70 @@ def grade_forecast(
     predictions = _read_csv(archive_dir / "predictions.csv")
     if not predictions:
         raise ForecastGradingError("forecast contains no predictions")
-    forecast_by_name = {_name_key(row["player_name"]): row for row in predictions}
-    if len(forecast_by_name) != len(predictions):
-        raise ForecastGradingError("forecast contains duplicate normalized player names")
+    forecast_by_name: dict[str, dict[str, str]] = {}
+    for row in predictions:
+        key = _canonical_name_key(row["player_name"])
+        if key in forecast_by_name:
+            raise ForecastGradingError(f"forecast contains duplicate canonical player names: {key}")
+        forecast_by_name[key] = row
 
     result_rows = parse_leaderboard_rows(results_page.read_text(encoding="utf-8"))
-    results_by_name = {_name_key(str(row["player_name"])): row for row in result_rows}
-    if len(results_by_name) != len(result_rows):
-        raise ForecastGradingError("results contain duplicate normalized player names")
-    missing_results = sorted(set(forecast_by_name) - set(results_by_name))
-    unexpected_results = sorted(set(results_by_name) - set(forecast_by_name))
-    if missing_results or unexpected_results:
-        raise ForecastGradingError(
-            f"forecast/results field mismatch; missing={missing_results}, unexpected={unexpected_results}"
-        )
+    results_by_name: dict[str, dict[str, object]] = {}
+    for row in result_rows:
+        key = _canonical_name_key(str(row["player_name"]))
+        if key in results_by_name:
+            raise ForecastGradingError(f"results contain duplicate canonical player names: {key}")
+        results_by_name[key] = row
+
+    matched_keys = set(forecast_by_name) & set(results_by_name)
+    if not matched_keys:
+        raise ForecastGradingError("forecast/results have no players in common")
+    forecast_only_names = sorted(
+        forecast_by_name[key]["player_name"] for key in set(forecast_by_name) - set(results_by_name)
+    )
+    ungraded_results_names = sorted(
+        str(results_by_name[key]["player_name"]) for key in set(results_by_name) - set(forecast_by_name)
+    )
+    aliases_applied = sorted(
+        {
+            forecast_by_name[key]["player_name"] + " <-> " + str(results_by_name[key]["player_name"])
+            for key in matched_keys
+            if _name_key(forecast_by_name[key]["player_name"])
+            != _name_key(str(results_by_name[key]["player_name"]))
+        }
+    )
 
     forecast_players = len(predictions)
-    baseline_by_target = {
-        target: min(TARGET_SLOTS[target] / forecast_players, 1.0)
-        for target in GRADED_TARGETS
-    }
-    graded_rows = []
+    # First pass: separate withdrawals from gradable rows so the structural
+    # baseline is computed on the actually graded cohort.
     excluded_names = []
-    for prediction in predictions:
-        result = results_by_name[_name_key(prediction["player_name"])]
+    gradable: list[tuple[dict[str, str], dict[str, object], str, Optional[int]]] = []
+    for key in matched_keys:
+        prediction = forecast_by_name[key]
+        result = results_by_name[key]
         finish_text = str(result["position"])
-        finish_position = parse_finish_position(finish_text)
-        if finish_text.strip().upper() in {"WD", "DNS", "DQ"}:
+        normalized_finish = finish_text.strip().upper()
+        if normalized_finish in WITHDRAWN_FINISHES:
             excluded_names.append(prediction["player_name"])
             continue
-        if finish_position is None:
+        finish_position = parse_finish_position(finish_text)
+        if finish_position is None and normalized_finish != "CUT":
             raise ForecastGradingError(
                 f"ungradable finish for {prediction['player_name']}: {finish_text}"
             )
+        gradable.append((prediction, result, finish_text, finish_position))
+
+    graded_players = len(gradable)
+    if graded_players == 0:
+        raise ForecastGradingError("no gradable players in forecast/results intersection")
+    baseline_by_target = {
+        target: round(min(TARGET_SLOTS[target] / graded_players, 1.0), 6)
+        for target in GRADED_TARGETS
+    }
+    graded_rows = []
+    for prediction, _result, finish_text, finish_position in gradable:
         for target in GRADED_TARGETS:
+            actual = 0 if finish_position is None else int(finish_position <= TARGET_SLOTS[target])
             graded_rows.append(
                 {
                     "event_name": prediction["event_name"],
@@ -263,9 +341,9 @@ def grade_forecast(
                     "player_name": prediction["player_name"],
                     "finish_text": finish_text,
                     "finish_position": finish_position,
-                    "actual": int(finish_position <= TARGET_SLOTS[target]),
+                    "actual": actual,
                     "model_prob": prediction[TARGET_PROBABILITY[target]],
-                    "baseline_prob": round(baseline_by_target[target], 6),
+                    "baseline_prob": baseline_by_target[target],
                 }
             )
 
@@ -274,7 +352,7 @@ def grade_forecast(
     metrics = _metric_rows(
         graded_rows,
         forecast_players,
-        len(excluded_names),
+        len(excluded_names) + len(forecast_only_names),
         rolling_by_target,
     )
     winners = [row for row in result_rows if parse_finish_position(str(row["position"])) == 1]
@@ -293,7 +371,10 @@ def grade_forecast(
         _report(
             predictions[0]["event_name"],
             metrics,
-            excluded_names,
+            sorted(excluded_names),
+            forecast_only_names,
+            len(ungraded_results_names),
+            len(aliases_applied),
             str(winners[0]["player_name"]),
             predicted_winner["player_name"],
             results_url,
@@ -309,8 +390,12 @@ def grade_forecast(
         "graded_targets": list(GRADED_TARGETS),
         "excluded_targets": ["make_cut"],
         "forecast_players": forecast_players,
-        "graded_players_per_target": forecast_players - len(excluded_names),
-        "excluded_players": excluded_names,
+        "intersection_players": len(matched_keys),
+        "graded_players_per_target": graded_players,
+        "excluded_players": sorted(excluded_names),
+        "forecast_players_without_results": forecast_only_names,
+        "ungraded_results_players": ungraded_results_names,
+        "name_aliases_applied": aliases_applied,
         "results_source": {"organization": "CBS Sports", "url": results_url},
         "input_sha256": {
             "archive_manifest": _sha256(archive_dir / "archive_manifest.json"),
