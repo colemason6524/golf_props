@@ -627,3 +627,45 @@ def test_identity_blocks_fully_unmatched_field(tmp_path, monkeypatch):
     assert ec.state == wf.STATE_BLOCKED
     audit = json.loads(paths.identity_audit_path(KEY).read_text())
     assert audit["problems"] == ["entire field unmatched (1 players)"]
+
+
+def test_weekly_forecast_attempts_post_event_grading(tmp_path, monkeypatch):
+    """The loop must always try to grade ended, ungraded archived events."""
+    from golf_props.events.event_control import (
+        STATE_FORECAST_ARCHIVED,
+        EventControl,
+    )
+
+    paths = prepare_paths(tmp_path)
+    archived = EventControl(
+        event_key="graded_past_2025",
+        event_name="Graded Past",
+        season=2025,
+        schedule_start_date="2025-04-10",
+        schedule_end_date="2025-04-13",
+        state=STATE_FORECAST_ARCHIVED,
+        created_at_utc="2025-04-01T00:00:00Z",
+        updated_at_utc="2025-04-13T00:00:00Z",
+    )
+    archived.save(paths.event_control_path("graded_past_2025"))
+    paths.pointer_path.write_text("graded_past_2025", encoding="utf-8")
+
+    seen = {}
+    sentinel = {"graded": ["graded_past_2025"], "failed": [], "skipped": []}
+
+    def fake_attempt(attempt_paths, attempt_now):
+        seen["paths"] = attempt_paths
+        seen["now"] = attempt_now
+        return sentinel
+
+    monkeypatch.setattr(wf, "attempt_post_event_grading", fake_attempt)
+    freeze_clock(monkeypatch, "2025-05-10T12:00:00Z")
+
+    exit_code, status = wf.weekly_forecast(
+        paths, schedule_html=SCHEDULE.read_text(encoding="utf-8")
+    )
+
+    assert exit_code == wf.EXIT_WAITING
+    assert seen["paths"] is paths
+    assert seen["now"] == datetime(2025, 5, 10, 12, 0, tzinfo=timezone.utc)
+    assert status["grading"] == sentinel

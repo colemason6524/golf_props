@@ -74,6 +74,7 @@ from golf_props.pipelines.current_event_simulation import (
     FrozenCurrentEventError,
     run_frozen_current_event,
 )
+from golf_props.pipelines.post_event_grading import attempt_post_event_grading
 from golf_props.ingestion.pga_tour_collector import (
     PGATourCollectorError,
     collect_pga_tour_field,
@@ -981,6 +982,15 @@ def weekly_forecast(
         _finalize(paths, status, ec, skipped)
         return EXIT_WAITING, status
     _set_key(ec, key or ec.event_key)
+
+    if not dry_run:
+        # Post-event grading safeguard: grade any ended, ungraded archived
+        # forecast.  Only cheap local event/grading-record checks run until
+        # an event is genuinely eligible, so the two-hourly loop stays fast.
+        try:
+            status["grading"] = attempt_post_event_grading(paths, now)
+        except Exception as exc:  # the safeguard must never break the loop
+            status["grading"] = {"error": str(exc)}
 
     players_rows = _load_players(paths)
 
