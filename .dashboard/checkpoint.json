@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "project_id": "golf_props",
-  "updated_at": "2026-10-11T02:43:47+00:00",
+  "updated_at": "2026-10-11T03:59:06+00:00",
   "status": "observing",
-  "summary": "send_ops_alert() now suppresses identical alert text within 24h (ledger data/interim/weekly/ops_alerts.json). Stops 2-hourly Discord spam from grading/discovery retries. 251 tests pass. Commit 76ef7bf pushed.",
+  "summary": "Bot now stays completely silent when tournament in progress. Fixed Baycurrent end date to 2026-10-11. 251 tests pass.",
   "experiment": null,
   "watching_for": null,
   "next_action": null,
@@ -11,9 +11,9 @@
   "git_commit": "",
   "check_back": {
     "kind": "grade_event",
-    "label": "Golf ops alerts deduped (24h)",
+    "label": "mid-tournament silence fix",
     "target": null,
-    "baseline": "2026-10-11T02:43:47+00:00",
+    "baseline": "2026-10-11T03:59:06+00:00",
     "events": [],
     "target_date": null
   },
