@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
   "project_id": "golf_props",
-  "updated_at": "2026-10-07T04:36:34+00:00",
+  "updated_at": "2026-10-07T12:03:11+00:00",
   "status": "observing",
-  "summary": "Weekly-loop grading safeguard shipped (19386e0): post_event_grading auto-grades ended archived forecasts on the 2-hourly loop, adopts the manual Bank of Utah grade, raises [URGENT] blocked + Discord alert on grading failure; 241 tests pass.",
+  "summary": "Fixed sports-golf-forecast.service 203-EXEC failure: run_linux_task.sh was committed without the execute bit. Restored +x in working tree and git, commit 435873a, pushed, service restarted and now executing normally.",
   "experiment": null,
-  "watching_for": "Next tournament end triggers first automatic grading attempt; no silent misses.",
-  "next_action": "None; safeguard runs automatically in the weekly loop.",
-  "deployed": true,
-  "git_commit": "19386e0",
+  "watching_for": null,
+  "next_action": null,
+  "deployed": false,
+  "git_commit": "",
   "check_back": {
     "kind": "grade_event",
     "label": "post-event forecast grading",
     "target": null,
-    "baseline": "2026-10-07T04:36:34+00:00",
+    "baseline": "2026-10-07T12:03:11+00:00",
     "events": [],
     "target_date": null
   },
@@ -29,6 +29,13 @@
     {
       "label": "Azure deployment",
       "path": "docs/azure_deployment.md"
+    }
+  ],
+  "run_recoveries": [
+    {
+      "service": "sports-golf-forecast.service",
+      "fix_deployed_at": "2026-10-07T12:02Z",
+      "summary": "Restored execute bit on run_linux_task.sh, committed 435873a and pushed, service verified running."
     }
   ]
 }
