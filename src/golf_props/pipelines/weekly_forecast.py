@@ -229,6 +229,26 @@ def _schedule_start_passed(ec: EventControl, now: datetime) -> bool:
     return False
 
 
+def _schedule_end(ec: EventControl, now: datetime) -> date | None:
+    """Scheduled final competitive day, or None when unknown."""
+    if ec.schedule_end_date:
+        try:
+            return date.fromisoformat(ec.schedule_end_date)
+        except ValueError:
+            pass
+    return None
+
+
+def _tournament_in_progress(ec: EventControl, now: datetime) -> bool:
+    """True when the event has started but its scheduled final day has not passed."""
+    if not _schedule_start_passed(ec, now):
+        return False
+    end = _schedule_end(ec, now)
+    if end is None:
+        return True
+    return now.date() <= end
+
+
 def _record_skip(
     paths: WeeklyPaths,
     key: str,
@@ -971,7 +991,8 @@ def weekly_forecast(
             break
         # ec was just closed as missed/skipped; loop to advance to the next event.
         if ec is not None and ec.state == STATE_DEADLINE_MISSED:
-            _notify_ops(f"golf forecast deadline missed: {ec.event_name}")
+            if not _tournament_in_progress(ec, now):
+                _notify_ops(f"golf forecast deadline missed: {ec.event_name}")
     if ec is None:
         status["state"] = "no_event"
         _finalize(paths, status, None, skipped)
@@ -1042,7 +1063,8 @@ def weekly_forecast(
         if now >= first_tee:
             ec.transition(STATE_DEADLINE_MISSED, "first tee passed", now)
             ec.save(paths.event_control_path(ec.event_key))
-            _notify_ops(f"golf forecast deadline missed: {ec.event_name}")
+            if not _tournament_in_progress(ec, now):
+                _notify_ops(f"golf forecast deadline missed: {ec.event_name}")
             _finalize(paths, status, ec, skipped)
             return EXIT_DEADLINE_MISSED, status
         if now < due:

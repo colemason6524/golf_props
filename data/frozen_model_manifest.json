@@ -1,0 +1,103 @@
+{
+  "canonical_dir": "data/processed/pga_2001_2026",
+  "created_at_utc": "2026-08-06T02:54:42.290581+00:00",
+  "cut_size": 65,
+  "frozen_model": {
+    "half_life_days": 365.0,
+    "next_evaluation_rule": "event_date_start must be after both source_data_through and the UTC model-freeze date",
+    "prior_rounds": 8.0,
+    "prospective_holdout_after": "2026-08-06",
+    "selection_date_from": "2025-01-01",
+    "selection_date_to": "2026-07-08",
+    "selection_events": 20,
+    "selection_mean_brier_skill": 0.0639649,
+    "source_data_through": "2026-07-11",
+    "variance_prior_rounds": 20.0
+  },
+  "grid": {
+    "half_life_days": [
+      90.0,
+      180.0,
+      365.0
+    ],
+    "prior_rounds": [
+      8.0,
+      20.0,
+      40.0
+    ],
+    "variance_prior_rounds": [
+      20.0
+    ]
+  },
+  "input_sha256": {
+    "events": "b489210b3505f5e19676fb44d4c2712286c90406d70f16df4f4a40c47c7c21f8",
+    "player_event_results": "d7afa3eff8e85bfd52b2621d9f8496194bdac7c38ad053c38c5201627573a3fc",
+    "round_performance": "568a55ce611b189983240f7b0fe694e01053c97cbd3221eb245b0495e90f36eb"
+  },
+  "manifest_version": 1,
+  "rolling_folds": [
+    {
+      "evaluation_date_from": "2022-01-01",
+      "evaluation_date_to": "2022-12-31",
+      "evaluation_events": 45,
+      "fold_id": "fold_2022",
+      "half_life_days": 365.0,
+      "prior_rounds": 8.0,
+      "selection_date_from": "2021-01-01",
+      "selection_date_to": "2021-12-31",
+      "selection_events": 20,
+      "selection_mean_brier_skill": 0.04646698,
+      "variance_prior_rounds": 20.0
+    },
+    {
+      "evaluation_date_from": "2023-01-01",
+      "evaluation_date_to": "2023-12-31",
+      "evaluation_events": 44,
+      "fold_id": "fold_2023",
+      "half_life_days": 365.0,
+      "prior_rounds": 8.0,
+      "selection_date_from": "2022-01-01",
+      "selection_date_to": "2022-12-31",
+      "selection_events": 20,
+      "selection_mean_brier_skill": 0.06490582,
+      "variance_prior_rounds": 20.0
+    },
+    {
+      "evaluation_date_from": "2024-01-01",
+      "evaluation_date_to": "2024-12-31",
+      "evaluation_events": 47,
+      "fold_id": "fold_2024",
+      "half_life_days": 365.0,
+      "prior_rounds": 8.0,
+      "selection_date_from": "2023-01-01",
+      "selection_date_to": "2023-12-31",
+      "selection_events": 20,
+      "selection_mean_brier_skill": 0.061171,
+      "variance_prior_rounds": 20.0
+    },
+    {
+      "evaluation_date_from": "2025-01-01",
+      "evaluation_date_to": "2025-12-31",
+      "evaluation_events": 46,
+      "fold_id": "fold_2025",
+      "half_life_days": 365.0,
+      "prior_rounds": 8.0,
+      "selection_date_from": "2024-01-01",
+      "selection_date_to": "2024-12-31",
+      "selection_events": 20,
+      "selection_mean_brier_skill": 0.05708187,
+      "variance_prior_rounds": 20.0
+    }
+  ],
+  "round_performance_path": "data/interim/features/pga_2001_2026_round_performance.csv",
+  "seed": 20260729,
+  "selection_objective": "mean_normalized_brier_improvement",
+  "selection_protocol": "rolling_origin_validation_then_latest_window_freeze",
+  "selection_targets": [
+    "make_cut",
+    "top20",
+    "top10",
+    "top5"
+  ],
+  "status": "frozen_awaiting_future_evaluation"
+}

@@ -30,6 +30,7 @@ from golf_props.events.event_control import (
     iso_timestamp,
     utc_now,
 )
+from golf_props.normalization.cbs_results import leaderboard_is_final
 
 SCHEMA_VERSION = 1
 GRADING_RECORD_NAME = "grading.json"
@@ -55,6 +56,15 @@ RESULTS_TIMEOUT_SECONDS = 90
 
 class PostEventGradingError(ValueError):
     """Raised when a grading attempt cannot proceed."""
+
+
+class _TournamentInProgress(Exception):
+    """Internal control-flow: the leaderboard is still live.
+
+    Caught in :func:`attempt_post_event_grading` and turned into a silent
+    ``tournament_in_progress`` skip -- no grading record, no ops alert, no
+    dashboard checkpoint.  A mid-tournament loop run must say nothing.
+    """
 
 
 def _notify_ops(message: str) -> None:
@@ -275,6 +285,17 @@ def _grade_event(
     results_page, results_url = _collect_event_results(
         event_key, ec.event_name, now, results_timeout_seconds
     )
+    # Silent mid-tournament gate: a live leaderboard must never produce a
+    # grading attempt.  Raising the control-flow signal keeps the caller from
+    # routing this into the alerting failure path.
+    try:
+        page_html = results_page.read_text(encoding="utf-8")
+    except OSError:
+        page_html = ""
+    if not page_html or not leaderboard_is_final(page_html):
+        raise _TournamentInProgress(
+            f"leaderboard for {ec.event_name} ({event_key}) is not final yet"
+        )
     grade_forecast(
         archive_dir,
         results_page,
@@ -379,7 +400,21 @@ def attempt_post_event_grading(
             continue
         try:
             record = _grade_event(paths, ec, event_key, now, results_timeout_seconds)
+        except _TournamentInProgress as exc:
+            # Tournament still in progress: stay completely silent.  No
+            # grading record, no ops alert, no dashboard checkpoint.
+            summary["skipped"].append(
+                {"event_key": event_key, "reason": "tournament_in_progress"}
+            )
+            continue
         except Exception as exc:
+            if "not final" in str(exc).casefold():
+                # Belt-and-braces: a live leaderboard reaching us through
+                # grade_forecast must skip silently, never alert.
+                summary["skipped"].append(
+                    {"event_key": event_key, "reason": "tournament_in_progress"}
+                )
+                continue
             reason = f"{type(exc).__name__}: {exc}"
             _record_failure(paths, ec, event_key, now, reason, previous)
             summary["failed"].append({"event_key": event_key, "reason": reason})
