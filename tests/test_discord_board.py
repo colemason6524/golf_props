@@ -14,6 +14,15 @@ from golf_props.notifications.discord import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _isolated_ops_alert_ledger(tmp_path, monkeypatch):
+    # Ops-alert dedupe persists in data/interim/weekly/ops_alerts.json; keep
+    # tests hermetic so alert tests never see each other's deliveries.
+    monkeypatch.setenv(
+        "GOLF_PROPS_OPS_ALERT_LEDGER", str(tmp_path / "ops_alerts.json")
+    )
+
+
 def _archive(tmp_path: Path, classification: str = "prospective_forecast", timing_source: str = "exact_tee_times") -> Path:
     archive = tmp_path / "archive"
     archive.mkdir()

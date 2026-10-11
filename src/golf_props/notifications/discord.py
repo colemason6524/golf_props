@@ -248,15 +248,60 @@ def publish_board(
 MAIN_WEBHOOK_ENV = "GOLF_PROPS_DISCORD_WEBHOOK_URL"
 URGENT_PREFIX = "[URGENT]"
 
+# Repeat ops alerts with identical text are suppressed within this window so
+# the two-hourly loop cannot spam the channel while a wait is still normal
+# (e.g. grading retries for an event whose results are not out yet, or a
+# discovery failure that persists across runs).
+ALERT_DEDUPE_WINDOW_SECONDS = 24 * 3600
+ALERT_LEDGER_NAME = "ops_alerts.json"
+ALERT_LEDGER_ENV = "GOLF_PROPS_OPS_ALERT_LEDGER"
 
-def send_ops_alert(message: str, webhook_url: Optional[str] = None) -> bool:
+
+def _alert_ledger_path() -> Path:
+    override = os.environ.get(ALERT_LEDGER_ENV)
+    if override:
+        return Path(override)
+    from golf_props.config import PROJECT_ROOT
+
+    return PROJECT_ROOT / "data" / "interim" / "weekly" / ALERT_LEDGER_NAME
+
+
+def _load_alert_ledger(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _write_alert_ledger(path: Path, ledger: dict[str, Any]) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(path.name + ".tmp")
+        temporary.write_text(
+            json.dumps(ledger, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        temporary.replace(path)
+    except OSError:
+        pass
+
+
+def send_ops_alert(
+    message: str,
+    webhook_url: Optional[str] = None,
+    *,
+    _now: Optional[datetime] = None,
+) -> bool:
     """Send a short urgent operational alert to the main forecast channel.
 
     The forecast channel is shared with the board, so urgent messages are clearly
     prefixed with ``[URGENT]``. Only actionable failures should reach this
     function. It returns ``True`` only when a webhook is configured and delivery
     succeeds, and it never raises: operational alerting must not break the
-    forecast loop or block the board channel.
+    forecast loop or block the board channel.  A repeat alert with identical
+    text is suppressed when the same text was delivered within
+    ``ALERT_DEDUPE_WINDOW_SECONDS`` (tracked in
+    ``data/interim/weekly/ops_alerts.json``).
     """
     text = str(message or "").strip()
     if not text:
@@ -282,6 +327,29 @@ def send_ops_alert(message: str, webhook_url: Optional[str] = None) -> bool:
     sanitized = re.sub(
         r"(?m)^\s*File \".*?\", line \d+.*$", "see logs for details", sanitized
     )
+    try:
+        ledger_path: Optional[Path] = _alert_ledger_path()
+        ledger = _load_alert_ledger(ledger_path)
+        key = hashlib.sha256(sanitized.encode("utf-8")).hexdigest()
+        entry = ledger.get(key)
+        if isinstance(entry, dict) and entry.get("last_sent_utc"):
+            raw = str(entry["last_sent_utc"])
+            if raw.endswith("Z"):
+                raw = raw[:-1] + "+00:00"
+            try:
+                last = datetime.fromisoformat(raw)
+            except ValueError:
+                last = None
+            if last is not None:
+                if last.tzinfo is None:
+                    last = last.replace(tzinfo=timezone.utc)
+                now = _now or datetime.now(timezone.utc)
+                if (now - last).total_seconds() < ALERT_DEDUPE_WINDOW_SECONDS:
+                    return False
+    except Exception:
+        ledger_path = None
+        ledger = {}
+        key = hashlib.sha256(sanitized.encode("utf-8")).hexdigest()
     url = webhook_url or os.environ.get(MAIN_WEBHOOK_ENV)
     if not url:
         return False
@@ -305,6 +373,17 @@ def send_ops_alert(message: str, webhook_url: Optional[str] = None) -> bool:
             with urlopen(request, timeout=20) as response:
                 if response.status >= 300:
                     return False
+            try:
+                if ledger_path is not None:
+                    ledger[key] = {
+                        "message": sanitized,
+                        "last_sent_utc": (
+                            _now or datetime.now(timezone.utc)
+                        ).isoformat(),
+                    }
+                    _write_alert_ledger(ledger_path, ledger)
+            except Exception:
+                pass
             return True
         except HTTPError as exc:
             if exc.code not in {429, 500, 502, 503, 504} or attempt == 2:
