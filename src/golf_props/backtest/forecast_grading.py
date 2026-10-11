@@ -14,7 +14,11 @@ from pathlib import Path
 from typing import Any, Optional
 
 from golf_props.backtest.forecast_archive import verify_forecast_archive
-from golf_props.normalization.cbs_results import parse_finish_position, parse_leaderboard_rows
+from golf_props.normalization.cbs_results import (
+    leaderboard_is_final,
+    parse_finish_position,
+    parse_leaderboard_rows,
+)
 
 GRADED_TARGETS = ("top20", "top10", "top5", "winner")
 TARGET_SLOTS = {"top20": 20, "top10": 10, "top5": 5, "winner": 1}
@@ -292,7 +296,13 @@ def grade_forecast(
             raise ForecastGradingError(f"forecast contains duplicate canonical player names: {key}")
         forecast_by_name[key] = row
 
-    result_rows = parse_leaderboard_rows(results_page.read_text(encoding="utf-8"))
+    page_html = results_page.read_text(encoding="utf-8")
+    if not leaderboard_is_final(page_html):
+        raise ForecastGradingError(
+            "leaderboard is not final yet (live thru/today columns); "
+            "will retry once the final results settle"
+        )
+    result_rows = parse_leaderboard_rows(page_html)
     results_by_name: dict[str, dict[str, object]] = {}
     for row in result_rows:
         key = _canonical_name_key(str(row["player_name"]))

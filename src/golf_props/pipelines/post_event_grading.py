@@ -323,9 +323,11 @@ def _record_failure(
         # Same failure as the previous attempt: retry quietly instead of
         # re-firing the urgent alert every two hours.
         return
+    # Discord gets a clean, human line -- never the raw exception text.
+    # The full ``reason`` stays in grading.json, status.json, and the logs.
     message = (
-        f"golf post-event grading failed for {ec.event_name} "
-        f"({event_key}): {reason}"
+        f"golf post-event grading for {ec.event_name} could not finish yet; "
+        "will retry next run"
     )
     _notify_ops(message)
     _dashboard_checkpoint("blocked", f"[URGENT] {message}")

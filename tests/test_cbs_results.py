@@ -3,7 +3,12 @@ from pathlib import Path
 
 from golf_props.cli import main
 from golf_props.ingestion.cbs_results import extract_schedule_events
-from golf_props.normalization.cbs_results import normalize_directory, parse_leaderboard_rows
+from golf_props.normalization.cbs_results import (
+    leaderboard_is_final,
+    normalize_directory,
+    parse_leaderboard_rows,
+    parse_money,
+)
 from golf_props.normalization.merge_results import merge_directories
 
 
@@ -56,6 +61,56 @@ LEADERBOARD_HTML = """
 </tr>
 </tbody></table>
 """
+
+
+LIVE_LEADERBOARD_HTML = """
+<table><thead><tr>
+  <th></th><th>pos</th><th>ctry</th><th>name</th><th>to par</th><th>thru</th>
+  <th>today</th><th>r1</th><th>r2</th><th>r3</th><th>r4</th><th>total</th>
+</tr></thead><tbody>
+<tr class="TableBase-bodyTr GolfLeaderboard-bodyTr GolfLeaderboard-toggleScorecard--open">
+  <td></td><td>T1</td><td></td>
+  <td class="GolfLeaderboardTable-bodyTd--playerName">
+    <span class="CellPlayerName--short"><a>M. Brennan</a></span>
+    <span class="CellPlayerName--long"><a>Michael Brennan</a></span>
+  </td>
+  <td>-13</td><td>3*</td><td>E</td><td>68*</td><td>67</td><td>65</td><td>-</td><td>200</td>
+</tr>
+<tr class="TableBase-bodyTr GolfLeaderboard-bodyTr GolfLeaderboard-toggleScorecard--open">
+  <td></td><td>CUT</td><td></td>
+  <td class="GolfLeaderboardTable-bodyTd--playerName">
+    <span class="CellPlayerName--short"><a>B. Campbell</a></span>
+    <span class="CellPlayerName--long"><a>Brian Campbell</a></span>
+  </td>
+  <td>E</td><td>-</td><td>9:21 PM</td><td>70</td><td>72</td><td>-</td><td>-</td><td>142</td>
+</tr>
+</tbody></table>
+"""
+
+
+def test_parse_money_never_raises_on_live_columns():
+    assert parse_money("3*") is None
+    assert parse_money("-") is None
+    assert parse_money("E") is None
+    assert parse_money("") is None
+    assert parse_money("$1,080,000") == 1080000.0
+
+
+def test_parse_leaderboard_rows_handles_live_layout():
+    rows = parse_leaderboard_rows(LIVE_LEADERBOARD_HTML)
+
+    assert len(rows) == 2
+    assert rows[0]["player_name"] == "Michael Brennan"
+    assert rows[0]["position"] == "T1"
+    assert rows[0]["total_to_par"] == -13
+    assert rows[0]["earnings"] is None
+    assert rows[0]["round_scores"] == [68, 67, 65, None]
+    assert rows[0]["total_score"] == 200
+
+
+def test_leaderboard_is_final_distinguishes_layouts():
+    assert leaderboard_is_final(LEADERBOARD_HTML) is True
+    assert leaderboard_is_final(LIVE_LEADERBOARD_HTML) is False
 
 
 def read_csv(path):

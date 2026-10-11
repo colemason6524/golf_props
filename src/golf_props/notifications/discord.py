@@ -266,6 +266,22 @@ def send_ops_alert(message: str, webhook_url: Optional[str] = None) -> bool:
         sanitized = re.sub(
             rf"\b{re.escape(word)}\b", "suppressed", sanitized, flags=re.IGNORECASE
         )
+    # Belt-and-braces: raw exception text must never reach the channel, even
+    # if a future caller interpolates ``{exc}`` into the message.  Exception
+    # class names, ``Class: detail`` shapes, and tracebacks are replaced with
+    # a pointer to status/logs.
+    # Drop the exception class AND any trailing raw detail on the same line
+    # (``ValueError: could not convert ... '3*'``); free-form trace detail
+    # can never be enumerated, so the whole tail goes.
+    sanitized = re.sub(
+        r"\s*:?\s*\b[A-Za-z_][A-Za-z0-9_]*(?:Error|Exception|Warning|Exit)\b\s*:?[^\n]*",
+        " (see status/logs for details)",
+        sanitized,
+    )
+    sanitized = re.sub(r"(?m)^\s*Traceback[\s\S]*$", "see logs for details", sanitized)
+    sanitized = re.sub(
+        r"(?m)^\s*File \".*?\", line \d+.*$", "see logs for details", sanitized
+    )
     url = webhook_url or os.environ.get(MAIN_WEBHOOK_ENV)
     if not url:
         return False

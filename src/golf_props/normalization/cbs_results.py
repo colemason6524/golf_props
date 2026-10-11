@@ -56,12 +56,49 @@ def parse_int(value: Optional[str]) -> Optional[int]:
 
 
 def parse_money(value: Optional[str]) -> Optional[float]:
+    # Tolerant: live leaderboard columns (thru/today) can land here when a
+    # page is captured mid-round, so non-money tokens must yield None rather
+    # than raising ValueError and failing the whole event.
     if value is None:
         return None
-    value = value.strip()
-    if value in {"", "-"}:
+    cleaned = value.strip().replace("$", "").replace(",", "").strip()
+    if not cleaned or cleaned == "-":
         return None
-    return float(value.replace("$", "").replace(",", ""))
+    if not re.fullmatch(r"[+-]?\d+(\.\d+)?", cleaned):
+        return None
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+LEADERBOARD_ROW_RE = re.compile(
+    r"<tr class=\"TableBase-bodyTr GolfLeaderboard-bodyTr.*?</tr>", re.S
+)
+
+
+def leaderboard_is_final(page_html: str) -> bool:
+    """Whether a CBS leaderboard page shows settled final results.
+
+    Final pages carry an ``earnings`` column; live/in-progress pages carry
+    ``thru``/``today`` columns instead (plus tee-time tokens and unplayed
+    rounds).  Grading must only run against final pages.
+    """
+    header = re.search(r"<thead.*?</thead>", page_html, flags=re.S)
+    if header:
+        cells = [
+            strip_tags(cell).casefold()
+            for cell in re.findall(r"<t[hd]\b[^>]*>(.*?)</t[hd]>", header.group(0), flags=re.S)
+        ]
+        if "thru" in cells or "today" in cells:
+            return False
+        if "earnings" in cells:
+            return True
+    for row_match in LEADERBOARD_ROW_RE.finditer(page_html):
+        cells = re.findall(r"<td\b[^>]*>(.*?)</td>", row_match.group(0), flags=re.S)
+        if len(cells) >= 12:
+            return False
+    return True
 
 
 def parse_score_to_par(value: Optional[str]) -> Optional[int]:
@@ -104,12 +141,8 @@ def is_disqualified(position: str) -> bool:
 
 def parse_leaderboard_rows(page_html: str) -> list[dict[str, object]]:
     rows = []
-    table_rows = re.findall(
-        r'<tr class="TableBase-bodyTr GolfLeaderboard-bodyTr.*?</tr>',
-        page_html,
-        flags=re.S,
-    )
-    for row_html in table_rows:
+    for row_match in LEADERBOARD_ROW_RE.finditer(page_html):
+        row_html = row_match.group(0)
         long_name_match = re.search(r'CellPlayerName--long.*?<a[^>]*>(.*?)</a>', row_html, flags=re.S)
         if not long_name_match:
             continue
@@ -118,6 +151,22 @@ def parse_leaderboard_rows(page_html: str) -> list[dict[str, object]]:
         if len(cells) < 11:
             continue
         position = cells[1]
+        if len(cells) >= 12:
+            # Live/in-progress layout: pos, ..., to par, thru, today,
+            # r1..r4, total.  No prize money is shown before the finish.
+            round_values = [parse_int(value) for value in cells[7:11]]
+            rows.append(
+                {
+                    "position": position,
+                    "player_name": player_name,
+                    "total_to_par": parse_score_to_par(cells[4]),
+                    "earnings": None,
+                    "round_scores": round_values,
+                    "total_score": parse_int(cells[11]),
+                    "rounds_played": sum(1 for score in round_values if score is not None),
+                }
+            )
+            continue
         round_values = [parse_int(value) for value in cells[6:10]]
         rows.append(
             {

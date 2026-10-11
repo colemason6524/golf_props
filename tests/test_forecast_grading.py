@@ -174,3 +174,23 @@ def test_canonical_name_key_transliteration_fold():
     assert _canonical_name_key("Adrian \u0141akos") == _canonical_name_key("Adrian Lakos")
     # Regression anchor: decomposing diacritics still fold via NFKD.
     assert _canonical_name_key("S\u00e9amus Power") == _canonical_name_key("Seamus Power")
+
+
+def test_grade_forecast_refuses_live_leaderboard(tmp_path):
+    archive = _archive(tmp_path)
+    page = tmp_path / "live.html"
+    page.write_text(
+        "<table><thead><tr><th></th><th>pos</th><th>ctry</th><th>name</th>"
+        "<th>to par</th><th>thru</th><th>today</th><th>r1</th><th>r2</th>"
+        "<th>r3</th><th>r4</th><th>total</th></tr></thead><tbody>"
+        '<tr class="TableBase-bodyTr GolfLeaderboard-bodyTr"><td></td><td>T1</td>'
+        "<td></td>"
+        '<td><span class="CellPlayerName--long"><a>Alpha One</a></span></td>'
+        "<td>-13</td><td>3*</td><td>E</td><td>68</td><td>67</td><td>65</td>"
+        "<td>-</td><td>200</td></tr></tbody></table>",
+        encoding="utf-8",
+    )
+    with pytest.raises(ForecastGradingError, match="not final yet"):
+        grade_forecast(
+            archive, page, _rolling_metrics(tmp_path), tmp_path / "grade"
+        )

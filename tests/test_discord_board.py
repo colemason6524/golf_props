@@ -153,3 +153,32 @@ def test_urgent_alert_delivery_failure_is_isolated(monkeypatch):
 
     # A failed alert must return False and never raise into the forecast loop.
     assert send_ops_alert("hard pipeline error") is False
+
+
+def test_urgent_alert_scrubs_raw_exception_text(tmp_path, monkeypatch):
+    import golf_props.notifications.discord as discord
+
+    sent = {}
+
+    class _Response:
+        status = 204
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(request, timeout=20):
+        sent["body"] = request.data.decode("utf-8")
+        return _Response()
+
+    monkeypatch.setenv("GOLF_PROPS_DISCORD_WEBHOOK_URL", "https://main.example/webhook")
+    monkeypatch.setattr(discord, "urlopen", fake_urlopen)
+
+    raw = "golf post-event grading failed for Baycurrent Classic (baycurrent_classic_2026): ValueError: could not convert string to float: \'3*\'"
+    assert send_ops_alert(raw) is True
+    payload = json.loads(sent["body"])
+    assert "ValueError" not in payload["content"]
+    assert "could not convert string to float" not in payload["content"]
+    assert payload["content"].startswith("[URGENT]")

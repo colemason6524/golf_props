@@ -219,7 +219,13 @@ def test_grading_failure_records_and_alerts(tmp_path, monkeypatch, spy):
     assert record["status"] == "failed"
     assert "ForecastGradingError" in record["reason"]
     assert len(spy["notify"]) == 1
-    assert "grading failed for Test Event" in spy["notify"][0]
+    # Discord gets a clean line; raw exception text stays in the record.
+    assert spy["notify"][0] == (
+        "golf post-event grading for Test Event could not finish yet; "
+        "will retry next run"
+    )
+    for leaked in ("ForecastGradingError", "Traceback"):
+        assert leaked not in spy["notify"][0]
     assert spy["dashboard"] == [
         ("blocked", f"[URGENT] {spy['notify'][0]}")
     ]

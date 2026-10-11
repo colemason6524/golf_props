@@ -952,7 +952,7 @@ def weekly_forecast(
             status["state"] = STATE_BLOCKED
             status["blocking_reason"] = f"discovery failed: {exc}"
             status["last_error"] = str(exc)
-            _notify_ops(f"golf forecast discovery failed: {exc}")
+            _notify_ops("golf forecast discovery could not finish; will retry next run")
             _finalize(paths, status, None, skipped)
             return EXIT_ERROR, status
         except NoNextEventError as exc:
@@ -964,7 +964,7 @@ def weekly_forecast(
             status["state"] = STATE_BLOCKED
             status["blocking_reason"] = str(exc)
             status["last_error"] = str(exc)
-            _notify_ops(f"golf forecast blocked: {exc}")
+            _notify_ops("golf forecast is blocked; check status for details")
             _finalize(paths, status, None, skipped)
             return EXIT_BLOCKED, status
         if ec is not None and ec.state not in TERMINAL_STATES:
@@ -1059,7 +1059,7 @@ def weekly_forecast(
             status["state"] = STATE_BLOCKED
             status["blocking_reason"] = str(exc)
             status["last_error"] = str(exc)
-            _notify_ops(f"golf forecast refused for {ec.event_name}: {exc}")
+            _notify_ops(f"golf forecast for {ec.event_name} could not run; check status for details")
             _finalize(paths, status, ec, skipped)
             return EXIT_BLOCKED, status
         if not result.get("archived"):
@@ -1068,7 +1068,7 @@ def weekly_forecast(
         status["notification"] = result.get("notification", "")
         if result.get("notification", "").startswith("failed"):
             _notify_ops(
-                f"golf Discord delivery failed for {ec.event_name}: {result['notification']}"
+                f"golf forecast board for {ec.event_name} could not be delivered; check status for details"
             )
 
     _finalize(paths, status, ec, skipped)
