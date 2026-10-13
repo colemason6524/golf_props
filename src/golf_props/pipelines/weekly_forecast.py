@@ -792,6 +792,22 @@ def _run_forecast(
         paths.weekly_dir / ec.event_key / f"staging_{now.strftime('%Y%m%dT%H%M%SZ')}"
     )
     staging.mkdir(parents=True, exist_ok=True)
+
+    # --- Withdrawal screen: drop WD/DQ players before the frozen sim ---
+    # Fail-open: fetch problems keep the field untouched.
+    from golf_props.ingestion.espn_withdrawals import filter_field_withdrawals
+    wd_removed, wd_diag = filter_field_withdrawals(
+        paths.field_path(ec.event_key))
+    espn_status = (wd_diag.get("espn") or {}).get("status")
+    print(f"[weekly-forecast] withdrawal screen: "
+          f"removed={wd_diag.get('removed')} "
+          f"field={wd_diag.get('field_size_before')}->"
+          f"{wd_diag.get('field_size_after')} "
+          f"espn_status={espn_status}")
+    for r in wd_removed:
+        print(f"[weekly-forecast] withdrawal removed: {r['player_name']} "
+              f"({r['reason']})")
+
     try:
         run_frozen_current_event(
             paths.manifest,
@@ -843,7 +859,10 @@ def _run_forecast(
         except DiscordBoardError as exc:
             # The immutable archive remains valid if presentation is unavailable.
             notification = f"failed:{exc}"
-    return {"archived": True, "archive_dir": str(archive_dir), "notification": notification}
+    return {"archived": True, "archive_dir": str(archive_dir),
+            "notification": notification,
+            "withdrawals_removed": wd_removed,
+            "withdrawal_check": wd_diag}
 
 
 def _notify_ops(message: str) -> None:
@@ -1088,6 +1107,8 @@ def weekly_forecast(
             _finalize(paths, status, ec, skipped)
             return EXIT_BLOCKED, status
         status["notification"] = result.get("notification", "")
+        status["withdrawals_removed"] = result.get("withdrawals_removed", [])
+        status["withdrawal_check"] = result.get("withdrawal_check", {})
         if result.get("notification", "").startswith("failed"):
             _notify_ops(
                 f"golf forecast board for {ec.event_name} could not be delivered; check status for details"
