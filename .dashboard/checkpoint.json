@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "project_id": "golf_props",
-  "updated_at": "2026-10-13T00:48:42+00:00",
+  "updated_at": "2026-10-13T01:04:56+00:00",
   "status": "observing",
-  "summary": "Selection-layer audit complete: rank gates validated (log_rank coef -0.2 to -0.4, adds signal beyond model_prob). Calibration-map approach tested on temporal holdout, NO-GO (Brier worse, overfit). No backwards gates or toxic cohorts found. Selection layer sound.",
+  "summary": "Collection phase: fixes shipped, monitoring live impact. Will flag when recalibration or selection review needed.",
   "experiment": null,
   "watching_for": null,
   "next_action": null,
@@ -13,7 +13,7 @@
     "kind": "grade_event",
     "label": "after a week of games",
     "target": null,
-    "baseline": "2026-10-13T00:48:42+00:00",
+    "baseline": "2026-10-13T01:04:56+00:00",
     "events": [],
     "target_date": null,
     "monitoring": false
