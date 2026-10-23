@@ -52,7 +52,7 @@ journal**, and that is what section 2 recomputes.
 | Model output, immutable | `data/interim/reports/prospective_forecasts/<event_key>/` (9 files incl. `manifest.json`, `simulation_summary.json`, `top20.csv`…`winner.csv`) | `pipelines/weekly_forecast.py` | `backtest/forecast_archive.py::verify_forecast_archive`, `notifications/discord.py::build_board`, `backtest/forecast_grading.py::grade_forecast` | no (`data/interim/` ignored) |
 | Grade record | `data/interim/reports/forecast_grading/<event_key>/` = `graded_predictions.csv`, `metrics.csv`, `report.md`, `grading_manifest.json` | `backtest/forecast_grading.py::grade_forecast` (CLI `grade-forecast`), orchestrated by `pipelines/post_event_grading.py::attempt_post_event_grading` | `report.md`/`metrics.csv` read by humans only; `grading_manifest.json` read for idempotency | Bank of Utah only (force-added) |
 | Grade status / idempotency sidecar | `data/interim/weekly/<event_key>/grading.json` | `pipelines/post_event_grading.py` | same module (`reused_existing_output`) | no |
-| Incumbent parameters | `data/frozen_model_manifest.json` | manual freeze | `pipelines/weekly_forecast.py` | yes |
+| Incumbent parameters | `data/interim/reports/rolling_round_simulation_validation/frozen_model_manifest.json` | manual freeze (`rolling-simulation-validation`, 2026-08-06) | `pipelines/weekly_forecast.py:113-117` (`WeeklyPaths.manifest`) | no (`data/interim/` ignored); a byte-identical copy is tracked at `data/frozen_model_manifest.json`, which **no code path reads** |
 | Rolling retrospective aggregate (reference only) | `data/interim/reports/rolling_recompute_20261007/aggregate_metrics.csv` | `rolling-simulation-validation` run of 2026-10-07 | `post_event_grading._rolling_metrics_path()` fallback; rendered as a "historical reference" column in `report.md` | no (sha pinned in each `grading_manifest.json`) |
 
 Ordering guarantee: `weekly_forecast` writes the archive only after the field is
@@ -329,11 +329,21 @@ artifacts of record.
   rounds.
 
 Not a contradiction — same parameters, different freeze timestamps — but three
-files claiming to be "the frozen manifest" is exactly the shape that rots. The
-tracked one (`data/frozen_model_manifest.json`) is the one the code reads;
-`docs/project_handoff.md:1065` points at the rolling-directory copy instead.
-Documented, not changed: pinning which copy is canonical is a policy decision
-(step 3 lists it as dead/legacy), and the params are provably equal.
+files claiming to be "the frozen manifest" is exactly the shape that rots.
+
+**Correction to the first draft of this section (2026-10-23, step 3):** the
+tracked copy is *not* the one the code reads. `pipelines/weekly_forecast.py:113-117`
+hard-codes `data/interim/reports/rolling_round_simulation_validation/frozen_model_manifest.json`
+— a path under gitignored `data/interim/`, so **the manifest the production loop
+actually loads is not in git**, while the tracked `data/frozen_model_manifest.json`
+is read by nothing (`grep -rn frozen_model_manifest src/` returns only the
+weekly path, the writer at `rolling_simulation_validation.py:696`, and an
+egg-info copy of the README). `docs/project_handoff.md:1065` by contrast points
+at the rolling-directory copy, i.e. the document is right and the tracked file
+is the orphan. Pinning which copy is canonical — and deciding whether the live
+one should be tracked — is a policy call, so this is documented, not changed;
+the params are provably equal, so today the split changes nothing about the
+forecast. It changes a great deal about reproducibility: see §3.5.
 
 #### 2.5.5 Split source of truth in git
 
@@ -344,3 +354,209 @@ the VM (`data/interim/` is gitignored). A fresh clone therefore has one grade, a
 single host has two, and the audit had to reconstruct the record from VM disk.
 Recorded as a finding (step 4 adds no ignore rules — changing what is tracked is
 a policy decision).
+
+## 3. Dead code, dead documents, and legacy surface
+
+### 3.1 What "dead" was allowed to mean
+
+Three independent probes, all re-runnable from the repo:
+
+1. **Module reachability** — AST import graph rooted at `golf_props.cli`, so any
+   entry point the loop truly uses must be in the reached set.
+2. **CLI surface** — every `add_parser` command (`39`) and every
+   `add_argument("--…")` flag (`109`) in `src/golf_props/cli.py`,
+   cross-referenced against every `*.md`, everything under `scripts/`, and the
+   systemd unit files.
+3. **Documentation paths** — every repo-relative path appearing in a `.md`
+   (`117` distinct), tested for existence on the VM and for presence in
+   `git log --all`.
+
+A path that fails probe 3 is only a defect when the sentence around it asserts
+the file exists, or hands it to a command a human is meant to run. Template
+outputs (`--output-dir <somewhere you choose>`) are not defects, and nothing
+below counts them as such.
+
+### 3.2 Modules: none dead
+
+`58` module files under `src/golf_props/`. The import graph from
+`golf_props.cli` reaches `46` distinct module names; the residue is package
+`__init__` nodes collapsed by the name normaliser, and the unreachable-module
+list is empty — printed as an empty set, not inferred.
+
+Four modules look orphaned by name and are not:
+
+- `backtest/simulation_backtest.py` → `simulation-backtest` (documented, README)
+- `backtest/value_report.py` → `value-report` (documented, README)
+- `odds/covers_inspect.py` → `inspect-covers-odds` (**undocumented**)
+- `odds/draftkings_predictions.py` → `run-dk-current-value` (**undocumented**)
+
+Verdict: nothing to delete. The dead surface in this repo sits at the command
+layer, and even there "dead" means nobody documented it, not that it cannot run.
+
+### 3.3 CLI commands: 17 of 39 are named in no document and no script
+
+Referenced by no `*.md`, no `scripts/**`, no unit file:
+
+- `doctor`
+- `normalize-bootstrap-results`
+- `normalize-espn-results`
+- `collect-cbs-results`
+- `normalize-cbs-results`
+- `normalize-manual-odds`
+- `build-player-event-features`
+- `time-split-baseline`
+- `event-rankings`
+- `odds-movement`
+- `audit-odds-sources`
+- `inspect-covers-odds`
+- `inspect-odds-url-batch`
+- `collect-dk-placement`
+- `parse-dk-placement`
+- `collect-parse-dk-placement`
+- `run-dk-current-value`
+
+These are wired to real modules and would run; they are undocumented, not
+broken. Nine belong to the sportsbook cross-check layer that the documents
+deliberately demote to "comparison only" (`odds-movement`, `audit-odds-sources`,
+`inspect-covers-odds`, `inspect-odds-url-batch`, `normalize-manual-odds`,
+`collect-dk-placement`, `parse-dk-placement`, `collect-parse-dk-placement`,
+`run-dk-current-value`) — which explains, but does not document, the silence.
+The other eight are bootstrap/validation commands for data sources and baselines
+the repo has since consolidated or superseded (`doctor`,
+`normalize-bootstrap-results`, `normalize-espn-results`, `collect-cbs-results`,
+`normalize-cbs-results`, `build-player-event-features`, `time-split-baseline`,
+`event-rankings`).
+
+`event-rankings` deserves the footnote: it is the predecessor of the documented
+`current-event-rankings`, and a substring search for the former can never
+distinguish it from the latter. The first pass of this audit counted 16 dead
+commands for exactly that reason and was corrected to 17 by a word-boundary
+match. Commands do not go quiet because someone decided to hide them; they go
+quiet because the grep says otherwise.
+
+The number that matters: the documented workflow covers 22 of 39 commands. A
+reader of `README.md` cannot reproduce the full pipeline, and four orphan-looking
+modules survive only because their commands are undiscoverable. Recorded, not
+changed — deciding which of the 16 to retire is a product decision, and deleting
+CLI surface for undocumented but working code is not an unambiguous fix.
+
+### 3.4 CLI flags: 41 of 109 appear in no document
+
+Most of the 41 belong to the 17 undocumented commands (`--crawl-linked`,
+`--max-linked-pages`, `--source-kind`, `--raw-output-dir`, …). The remainder are
+optional tuning parameters of documented commands (`--min-group-size`,
+`--min-prior-starts`, `--enable-logistic`, `--max-absolute-adjustment`,
+`--forecast-due-hours-before`, `--skip-collect`, `--retries`,
+`--timeout-seconds`).
+
+No *required* flag of a documented command is undocumented. Checked
+mechanically: of 39 `required=True` flags, five appear nowhere in the docs —
+`--predictions` (`event-rankings`), `--history-dir` (`odds-movement`), and
+`--raw`, `--raw-output-dir`, `--processed-output` (the three `dk-*` commands) —
+and all five hang off commands from §3.3. So this is documentation debt, not a
+broken runbook.
+
+### 3.5 Documentation paths: 45 of 117 absent, and only 16 are defects
+
+Full accounting, so the number is auditable rather than asserted:
+
+- **4** false positives of the checker: host-absolute prefixes
+  (`docs/azure_deployment.md:14` "data/archive", `:18` `…/config/systemd/user`,
+  `:124` `…/config/golf_props/env`) and one prose fragment
+  (`docs/project_handoff.md:7`, the words "data/source state").
+- **23** template output targets of commands that have simply never been run on
+  this host (`README.md:169,178,180,195,204,205,237,238,255,260,261,266,287,375,387,446`;
+  `docs/continuation_prompt.md:84`; `docs/implementation_roadmap.md:92-96,137`).
+- **1** placeholder input inside a command template that also carries
+  `"Tournament Name"` / `YYYY-MM-DD` placeholders: `data/raw/fields/current_field.csv`
+  (`README.md:236`, again at `:259` and `:286`). The real field files are
+  `data/fields/wyndham_championship_2026_field.csv` (+ `_notes.md`, with a second
+  copy under `data/raw/fields/`).
+- **1** deliverable that the same file then denies: `docs/implementation_roadmap.md:175`
+  lists `src/golf_props/backtest/calibration_report.py`, and `:177-179` states
+  that no such module exists and calibration output lives in the time-split
+  baseline report. Self-corrected, merely untidy.
+- **3** **absent inputs: the documented command cannot run as written.**
+  `README.md:167` feeds `current-event-rankings --features
+  data/interim/features/pga_2001_2026_player_event_features.csv` (absent);
+  `README.md:202-203` feeds `audit-course-crosswalk --base
+  data/processed/espn_pga_2001_2025 --add data/processed/cbs_pga_2026` and
+  `data/processed/` contains only `current_events`, `odds_snapshots`,
+  `pga_2001_2026`. Defect, one-shot legacy procedure.
+- **4** **dead paths inside live runbooks** — the class (b) finding of §2.4:
+  `README.md:331` (superseded `--rolling-metrics` path, command hard-fails),
+  `README.md:332`, `docs/NEXT_CHECKIN.md:58`, `docs/continuation_prompt.md:97`
+  (all `prospective_forecast_grades/`, a directory that has never existed).
+- **6** **artifacts asserted to exist, absent from disk and from all git history**
+  (`git log --all -- 'data/**<name>*'` empty for every one):
+  `README.md:106-107` (two of the five files in "The latest working Bovada
+  collection path produced:" — the two `bovada_golf_current_event_rankings` /
+  `_current_value_report` reports), and `docs/project_handoff.md`'s "Important
+  Artifacts" list at `:1053` (`performance_data_audit/report.md`), `:1061`
+  (`rolling_round_simulation_validation/report.md`), `:1076`/`:1078`
+  (`course_challenger_validation/report.md` and `challenger_manifest.json`).
+- **2** that are the phantom TOUR record of §2.5.2:
+  `docs/project_handoff.md:163` (its archive) and `:171` (its "preserved" CBS
+  leaderboard).
+- **1** asserted preserved evidence with no copy here:
+  `docs/project_handoff.md:193` (`data/raw/current_events/_registry_review/`).
+
+Pattern, stated plainly: the documents were written against a Mac workspace
+whose `data/` tree was never carried to this VM (see §2.5.2 for why the records
+could not be). This VM's `data/interim/reports/` contains exactly six
+directories — `bovada_golf_odds_collection`, `forecast_delivery`,
+`forecast_grading`, `prospective_forecasts`, `rolling_recompute_20261007`,
+`rolling_round_simulation_validation` — while the documents assert roughly a
+dozen research-report paths that the closed-source research runs produced
+elsewhere. None of those have ever been in git, so a fresh clone is missing the
+same files this host is missing.
+
+### 3.6 Reproducibility from a clone: the production loop cannot run
+
+`pipelines/weekly_forecast.py::WeeklyPaths` fixes the loop's inputs. Checked one
+by one against `git ls-files`:
+
+- `data/interim/reports/rolling_round_simulation_validation/frozen_model_manifest.json` — untracked
+- `data/interim/features/pga_2001_2026_round_performance.csv` — untracked
+- `data/processed/pga_2001_2026` — untracked
+- `data/raw/current_events/_schedule` — untracked
+- `data/interim/reports/prospective_forecasts` — untracked
+- `config/player_aliases.csv` — **tracked**
+
+Five of six are absent from a clone. This is the reproducibility half of
+§2.5.5 and the reason the §3.5 correction matters: the tracked
+`data/frozen_model_manifest.json` is the one artefact of the six that a clone
+*does* have, and no code reads it. Recorded, not changed — adding data to git
+(or a provisioning script) is a policy decision with storage consequences, and
+the audit's mandate is to apply only unambiguous fixes.
+
+### 3.7 Legacy surface that is correctly retired, and correctly documented
+
+Checked so that "legacy" is not assumed:
+
+- `--allow-retrospective` is **documented**, not an undocumented escape hatch:
+  `README.md:297`, `docs/project_handoff.md:707,985`,
+  `docs/research_narrative.md:119,278`. It is also enforced in code —
+  `pipelines/current_event_simulation.py:161` refuses a non-prospective event
+  unless the flag is set, and the run is labelled `retrospective_replay`.
+  No defect.
+- `scripts/windows/run_weekly_forecast.cmd`, `scripts/windows/run_bovada_collect.cmd`
+  and `docs/windows_deployment.md` describe the retired
+  `C:\Users\muski\golf_props` host (§2.5.2). They are marked as Windows
+  deployment docs and are not invoked by anything on this host: the only
+  installed units are `sports-golf-forecast.timer`/`.service` and
+  `sports-golf-bovada.timer`, which call `scripts/linux/run_linux_task.sh`.
+  No defect, but they are the origin of several of the §3.5 assertions.
+- `docs/azure_deployment.md` still calls the Mac the durable workspace
+  (`:12-13`) while the deployment it documents is this VM. Stale by
+  supersession, not contradiction; folded into step 4's doc corrections.
+
+### 3.8 What this section does not claim
+
+- It does not claim any module, command, or flag is unreachable — that was
+  tested and came back negative.
+- It does not claim the 23 template paths or the 41 undocumented flags are
+  defects.
+- It does not claim the documented runbooks other than `README.md:331` were
+  executed. Only that one was run end-to-end, because only that one hands the
+  reader a path the code itself defaults to and the file is provably gone.
