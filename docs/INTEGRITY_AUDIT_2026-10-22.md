@@ -17,7 +17,9 @@ VM data directory; fixes applied only where the correct behaviour is
 unambiguous. Every change is committed separately with the evidence in the
 commit message.
 
-Status: steps 2–5 pending (numbers, dead-path inventory, fixes, verdict).
+Status: complete. Steps 1–4 landed as `cec633a`, `453177c`, `b9a1a77`,
+`576e7d8`; §3 is the step-3 inventory, §4 the applied fixes and the verdict,
+§5 the evidence index.
 
 ---
 
@@ -560,3 +562,324 @@ Checked so that "legacy" is not assumed:
 - It does not claim the documented runbooks other than `README.md:331` were
   executed. Only that one was run end-to-end, because only that one hands the
   reader a path the code itself defaults to and the file is provably gone.
+
+---
+
+## 4. Fixes applied (step 4)
+
+Scope rule for this section: a fix was applied only where the correct value is
+determined by the code itself or by re-running a documented command. Anything
+that needs a decision — which of 17 undocumented commands to retire, which data
+belongs in git, what to do with a record whose source no longer exists — is
+documented in §2.5 and §3 and left alone. Steps 1–3 are commits `cec633a`,
+`453177c`, `b9a1a77`; step 4 is commit `576e7d8`.
+
+### 4.1 The Bank of Utah grade: 107 graded players rewritten to 108
+
+**Cause, from git alone.** Commit `3e60ce0` (2026-10-07T04:18) added the
+transliteration fold to `_canonical_name_key` and its message reads "Hojgaard
+fix: transliteration fold in `_canonical_name_key`; Bank of Utah re-grade 108
+(was 107), 232 tests pass". `git show --stat 3e60ce0` touches `src/`, `tests/`
+and `.dashboard/` — not one artifact. `git log -- data/interim/reports/forecast_grading/bank_of_utah_championship_2026/`
+returns only `7eef471` (03:52, twenty-five minutes *before* the fix). The
+re-grade happened on disk and was never committed, so the record that the
+repository states is the pre-fix one: 107 graded of 115 forecast players, with
+`Rasmus Højgaard` in `forecast_players_without_results` and `Rasmus Hojgaard` in
+`ungraded_results_players` — the same golfer on both sides of a name it could
+not fold.
+
+**Inputs did not change.** The old and new `grading_manifest.json` carry
+identical `input_sha256` blocks for the archive and the preserved CBS page. The
+entire manifest difference is the consequence of the fold:
+
+- `name_aliases_applied` gains the `Højgaard`/`Hojgaard` pair (10 aliases total);
+- `intersection_players` 111 → 112;
+- `graded_players_per_target` 107 → 108 for all four targets;
+- `forecast_players_without_results` drops `Rasmus Højgaard` (8 → 7).
+
+`model_prob` is unchanged for every one of the 428 previously graded rows; what
+moves is the field denominator in `baseline_prob` (20/107 → 20/108, 10/107 →
+10/108, 5/107 → 5/108, 1/107 → 1/108) and the four added `Højgaard` rows.
+
+**Reproduced independently, twice.** The Oct-7 04:17 re-grade had survived on
+this host in `/tmp/bankutah_regrade`; the step-4 re-run is
+`/tmp/bu_r1`, generated with the same arguments into an empty directory
+(`--results-url` included, matching the producer of the committed 03:52 file,
+whose manifest records the URL):
+
+```
+cd ~/golf_props && PYTHONPATH=src .venv/bin/python -m golf_props.cli grade-forecast \
+  --archive-dir data/interim/reports/prospective_forecasts/bank_of_utah_championship_2026 \
+  --results-page data/raw/prospective_results/bank_of_utah_championship_2026/cbs_final_leaderboard.html \
+  --rolling-metrics data/interim/reports/rolling_recompute_20261007/aggregate_metrics.csv \
+  --output-dir /tmp/bu_r1 \
+  --results-url https://www.cbssports.com/golf/leaderboard/pga-tour/31000135/bank-of-utah-championship/
+```
+
+`sort graded_predictions.csv | diff` between the Oct-7 and Oct-23 runs: empty.
+`diff metrics.csv`: empty. The 108-row content is reproducible; only the
+timestamp differs.
+
+**Adjacent defect, documented and not fixed: row order is not reproducible.**
+Two back-to-back runs (`/tmp/bu_r1`, `/tmp/bu_r2`) produce `graded_predictions.csv`
+files that differ as written and are byte-identical once sorted, while
+`metrics.csv` is byte-identical either way. The metric is a mean, so the grade
+is unaffected; the record is not diffable between runs, which is what makes a
+stale-vs-fresh artifact look like a large rewrite (`860` changed lines in the
+step-4 diff for what is four added rows and one rounding denominator). Not fixed
+here: making the writer sort its output changes a shared artifact format for
+every event, and the audit's mandate is unambiguous repairs only. Recorded as a
+reproducibility finding.
+
+**Write.** `grade-forecast` refuses a non-empty output directory, so the record
+was produced empty-dir-first and then copied over the tracked files. Old bytes
+are recoverable at `7eef471`:
+
+- `graded_predictions.csv` `c5b365bb1be3aaf20050c87e3b923e4402083e37c34054834e18a1d0431427e2`
+  → `3cdc62b390077ffd5714241b866c50987c252a9672ba4b6a1c23b5a76afda55e`
+- `metrics.csv` `2cc3b6e6aff6723f92c9c81d0cc062c4441208fedb8f239eb134c7bee0aff10a`
+  → `47adb17163598897bf26477eef2c421fdcc0aa6490cc3bb816bdd84fd056b1d8`
+- `report.md` `cf18350ed0b1be8beb4a897169893087640370c4a713fb7bc94af382bbf69d4e`
+  → `cf453ebfe0b8fb407bdbc1115e8423080b7704515d753ac47ff40fc53e798da0`
+- `grading_manifest.json` `63d3c01e5443dd5dea2c009832ee75557c65c311d94c522d4756d9969fbd2a64`
+  → `a48f33469d904a5fc4e5f62bea3f99c14de6289df6450f5bef2c16238801c604`
+
+**Per-event effect.** Bank of Utah `top20` Brier 0.145259 → 0.144474,
+`top10` 0.093212 → 0.092525, `top5` 0.045155 → 0.044792, `winner` 0.009314 →
+0.00923. Baseline Brier moves the same way, so `brier_improvement` stays
+essentially unchanged (+0.000867 → +0.000588 on `top20`; the fold adds a player
+the model liked more than the field average).
+
+**Headline effect** (see §2.2 for the definition and the three versions):
+
+- before, artifact-verified, n=175: 0.167154 / 0.111997 / 0.066975 / 0.011404
+- after, n=176: 0.166547 / 0.111469 / 0.066628 / 0.011341
+
+Every target improves by a few ten-thousandths. The direction is not the point;
+the point is that the number the repository advertises is now the number its own
+artifact produces when the documented command is run against it.
+
+### 4.2 Dead rolling-metrics reference in the live grading loop
+
+`pipelines/post_event_grading.py` carried `DEFAULT_ROLLING_METRICS =
+data/interim/reports/rolling_round_simulation_validation/aggregate_metrics.csv`,
+a file that has never existed on this host or in git (the directory exists and
+holds `frozen_model_manifest.json` and a `report.md` from the retired Mac
+workspace — nothing named `aggregate_metrics.csv`). It was dead only because a
+glob fallback happened to find
+`rolling_recompute_20261007/aggregate_metrics.csv`, so the loop worked while
+naming a file it does not read.
+
+Changed: the literal is gone; `ROLLING_RECOMPUTE_GLOB =
+"rolling_recompute_*/aggregate_metrics.csv"` names the actual contract, the
+fallback list is one entry shorter, and `_rolling_metrics_path()` says what it
+does (prefer `$GOLF_PROPS_ROLLING_METRICS`, else the newest recompute directory,
+else `None`). Grep after the change: `DEFAULT_ROLLING_METRICS` appears in no
+module, test, or script; the only surviving mention of the dead path is the
+comment that records why it is dead. Resolved value on this host:
+
+```
+rolling_recompute_*/aggregate_metrics.csv
+/home/azureuser/golf_props/data/interim/reports/rolling_recompute_20261007/aggregate_metrics.csv (exists)
+```
+
+### 4.3 Nine dead paths in live runbooks corrected
+
+Docs only, no behaviour, every replacement checked against the filesystem:
+
+- `README.md:331-332` — the `grade-forecast` example now passes
+  `--rolling-metrics data/interim/reports/rolling_recompute_20261007/aggregate_metrics.csv`
+  and writes `--output-dir data/interim/reports/forecast_grading/<event_key>`,
+  with a paragraph stating that the weekly loop resolves the newest recompute
+  directory itself and that `GRADING_ROOT` is the grade root. This is the one
+  documented command in §3.5 that hard-failed; it now runs and reproduces the
+  committed artifact (see §4.5).
+- `docs/NEXT_CHECKIN.md:58` — `prospective_forecast_grades/` →
+  `forecast_grading/bank_of_utah_championship_2026/`.
+- `docs/continuation_prompt.md:97` — says the TOUR grade came from the retired
+  Mac workspace, that no copy exists here, and points at
+  `forecast_grading/<event_key>` for the two that do.
+- `docs/project_handoff.md:173` — grade artifacts → "none in the repository"
+  with the citation to §2.5.2; `:1053` performance audit → never in git,
+  regenerate with `audit-performance-data`; `:1061` rolling report →
+  `rolling_recompute_20261007/report.md`; `:1068` "first prospective grade" →
+  the two real `forecast_grading/` directories; `:1076`/`:1078` course
+  challenger report and manifest → never in git, regenerate.
+
+### 4.4 Deliberately not changed
+
+- **The TOUR record** (§2.5.2). No artifact, no archive, no leaderboard page, no
+  git history. Reconstructing it would mean inventing a result; the documents now
+  say it does not exist here.
+- **The 17 undocumented commands and 41 undocumented flags** (§3.3, §3.4).
+  Retiring or documenting them is a product decision, not a correction.
+- **The remaining seven §3.5 paths** that are not in a live runbook: the three
+  absent-input commands (`README.md:167`, `:202-203`), the two Bovada reports
+  (`README.md:106-107`), `_registry_review/` (`docs/project_handoff.md:193`),
+  and `implementation_roadmap.md:175` (already self-corrected two lines later).
+  Each needs a decision about whether the workflow or the claim is the wrong
+  one, and two of them are one-shot legacy procedures that were never part of
+  the loop.
+- **The dashboard's null golf headline** (§1.4). The dashboard is outside this
+  repository.
+- **The three frozen manifests** (§2.5.4) and **the untracked production
+  inputs** (§3.6). Adding data to git, or pointing the tracked
+  `data/frozen_model_manifest.json` at something, is a policy decision with
+  storage consequences; the audit records which file is live and which is read
+  by nothing.
+- **Row order in `graded_predictions.csv`** (§4.1) and the **silent fall-through
+  when `$GOLF_PROPS_ROLLING_METRICS` points at a missing file** — the override is
+  preferred but only if it exists, so a typo quietly grades against the newest
+  recompute directory. Both are pre-existing behaviour, both are recorded here,
+  neither is repaired by a change whose correctness is self-evident.
+
+### 4.5 Verification of step 4
+
+- `.venv/bin/python -m pytest -q` → `264 passed` (read from the summary line, not
+  from the exit status). No test asserted the removed constant.
+- Headline recomputation over `data/interim/reports/forecast_grading/*` (script
+  in §5.1) → `bank_of_utah_championship_2026` 432 rows,
+  `baycurrent_classic_2026` 272 rows, n=176 per target, 0.166547 / 0.111469 /
+  0.066628 / 0.011341.
+- The literal README command, run against the corrected path into an empty
+  scratch directory, produces a `metrics.csv` byte-identical to the committed
+  one and a `graded_predictions.csv` identical as a set: the documentation and
+  the artifact now agree.
+- Consumers of the rewritten artifact: `grep -rn "graded_predictions.csv"` over
+  `src/ scripts/ deploy/` returns the writer (`pipelines/post_event_grading.py`
+  comment, `backtest/forecast_grading.py:391`) and nothing that reads it — it is
+  a record, not an input.
+- `grep -rn "prospective_forecast_grades"` over the repository, excluding this
+  document: no matches. `grep -rn "rolling_round_simulation_validation/aggregate_metrics"`
+  → the one explanatory comment in §4.2.
+- `git status -s` after the commit: only `.dashboard/checkpoint.json` and
+  `.dashboard/journal.jsonl`, dirty since the 2026-10-13 loop writes and
+  deliberately left out of every commit in this audit (§5.3).
+
+### 4.6 Verdict
+
+**The three defect classes, answered:**
+
+1. **Inflation / "bettable-only analog"** — **negative as specified**. No stake,
+   units, or PnL anywhere; no `NO_PLAY` layer; `PROHIBITED_WORDS` is enforced on
+   outbound copy; no code path pools Brier across events. The one adjacency is
+   provenance, not arithmetic: the prose headline pooled a third event that has
+   no artifact anywhere, and including it made every number worse, not better
+   (§2.2). A defect of record-keeping that happens to point the wrong way is
+   still a defect of record-keeping.
+2. **Dead code / dead path in the live loop** — **positive**. A constant naming a
+   file that never existed, kept alive by a glob fallback; a README command that
+   could not run; four documents pointing at a `prospective_forecast_grades/`
+   root that has never existed. Fixed in §4.2 and §4.3.
+3. **Documentation asserting artifacts that are not there** — **positive, five
+   ways**: a 107-row grade against a corrected 108; a TOUR grade with no artifact
+   anywhere; one record described at three different sizes; three frozen
+   manifests with two contents and two sources of truth; and the stale grade
+   itself, left behind by a commit whose message claims the re-grade. Two of
+   these are corrected here — the 107/108 record (§4.1, which is also the stale
+   grade) and the size statements that disagreed with it (§4.3). The TOUR record
+   is documented as unrecoverable (§2.5.2), and the frozen-manifest split and
+   the tracked-but-unread manifest are documented in §2.5.4 and §3.6, because
+   repairing either means choosing which file becomes the source of truth.
+
+**What the audit does not claim.** It does not claim the model is well
+calibrated (§2.2's numbers are *worse* than the 0.1307 rolling reference on every
+target), nor that the documented pipeline is reproducible from a clone (it is
+not, §3.6), nor that the micro-edits to `README.md` make the 23 template paths
+real. It claims that every number this repository states about itself is now
+either produced by the command that the repository documents, or labelled as
+absent.
+
+---
+
+## 5. Evidence index
+
+Every claim above resolves to one of these commands. Paths are relative to
+`~/golf_props` on the audit host; `.venv/bin/python` is the repo interpreter.
+
+### 5.1 Headline recomputation (§2.2, §4.1)
+
+```python
+# /tmp/headline.py — mean squared error of model_prob against actual, per target
+import csv, glob, os, collections
+rows = collections.defaultdict(list)
+for p in sorted(glob.glob('data/interim/reports/forecast_grading/*/graded_predictions.csv')):
+    ev = os.path.basename(os.path.dirname(p)); n = 0
+    with open(p) as f:
+        for r in csv.DictReader(f):
+            rows[r['target']].append((float(r['model_prob']) - float(r['actual'])) ** 2); n += 1
+    print('event', ev, 'rows', n)
+for t in ('top20', 'top10', 'top5', 'winner'):
+    v = rows[t]; print(t, 'n=%d' % len(v), '%.6f' % (sum(v) / len(v)))
+```
+
+Result, before the §4.1 rewrite (n=175): `top20 0.167154  top10 0.111997
+top5 0.066975  winner 0.011404`. After (n=176): `top20 0.166547  top10 0.111469
+top5 0.066628  winner 0.011341`. The "as reported" 0.171354 / 0.125929 / 0.090591
+/ 0.013294 is the same computation with the doc-only TOUR event's stated numbers
+folded in as a third sample; there is no artifact to recompute it from.
+
+### 5.2 Grading record archaeology (§2.5.1, §4.1)
+
+```
+git log --oneline -- data/interim/reports/forecast_grading/bank_of_utah_championship_2026/
+  -> 7eef471 only (03:52, before the alias fix)
+git show --stat 3e60ce0        # message claims "Bank of Utah re-grade 108 (was 107)"
+  -> src/, tests/, .dashboard/ — no artifact
+diff <(git show 7eef471:.../grading_manifest.json) .../grading_manifest.json
+  -> alias applied, intersection 111->112, graded 107->108, inputs identical
+```
+
+### 5.3 Working-tree hygiene
+
+```
+git status -s
+ M .dashboard/checkpoint.json
+ M .dashboard/journal.jsonl
+```
+
+Both were dirty before step 1 (the 2026-10-13 loop wrote an ESPN withdrawal
+checkpoint and journal line). They are not part of this audit, they carry no
+headline this audit published, and no commit in steps 1–4 touches them:
+`git show --stat cec633a 453177c b9a1a77 576e7d8` lists no `.dashboard/` path.
+
+### 5.4 Reachability and documentation inventory (§3.1–§3.5)
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Unreachable modules | import graph from `golf_props.cli` | none unreachable |
+| Undocumented commands | parser `add_parser` names vs `README.md` + `docs/**` (word-boundary) | 17 of 39 undocumented |
+| Undocumented flags | parser flags vs docs | 41 of 109 |
+| Required flags undocumented | `required=True` subset | 5 of 39, all on undocumented commands |
+| Documented paths absent | every `data/...` or `src/...` token in docs, checked on disk | 45 of 117 absent, 16 defects |
+| Clone reproducibility | `git ls-files` vs `WeeklyPaths` inputs | 5 of 6 untracked |
+
+### 5.5 Fix verification (§4.2–§4.5)
+
+```
+.venv/bin/python -m pytest -q                      -> 264 passed
+python /tmp/chk_rolling2.py                        -> ROLLING_RECOMPUTE_GLOB resolves,
+                                                      data/interim/reports/rolling_recompute_20261007/aggregate_metrics.csv exists
+bash /tmp/readme_check.sh                          -> README_CMD_MATCHES_COMMITTED_ARTIFACT
+                                                      METRICS_IDENTICAL
+grep -rn DEFAULT_ROLLING_METRICS src/ tests/ scripts/   -> 0
+grep -rn prospective_forecast_grades . (excl. this doc)  -> 0
+grep -rn graded_predictions.csv src/ scripts/ deploy/    -> writer only, no reader
+```
+
+`/tmp/readme_check.sh` runs the §4.3 README command verbatim with the Bank of
+Utah arguments into an empty directory, then compares sorted
+`graded_predictions.csv` and raw `metrics.csv` against the committed artifact.
+
+### 5.6 Commits
+
+```
+cec633a  step 1 — class tests and both headline numbers (§2)
+453177c  step 2 — class (a)/(b)/(c) findings and the artefact map (§1, §2.3–§2.5)
+b9a1a77  step 3 — dead-code, dead-doc and legacy-surface inventory (§3)
+576e7d8  step 4 — fixes: rolling-metrics constant, nine doc paths, 108-player
+                   Bank of Utah record (§4)
+```
+
+All four are on `main` and pushed to `origin/main`. Nothing was published
+anywhere else.
