@@ -1,35 +1,36 @@
 {
   "schema_version": 1,
   "project_id": "golf_props",
-  "updated_at": "2026-10-13T01:04:56+00:00",
+  "updated_at": "2026-10-23T15:31:41+00:00",
   "status": "observing",
-  "summary": "Collection phase: fixes shipped, monitoring live impact. Will flag when recalibration or selection review needed.",
-  "experiment": null,
-  "watching_for": null,
-  "next_action": null,
+  "summary": "Frozen-manifest dual-source resolution landed. The live path data/interim/reports/rolling_round_simulation_validation/frozen_model_manifest.json (SHA-256 8ee96b9f..., hard-coded at pipelines/weekly_forecast.py WeeklyPaths.manifest) is now the documented single source of truth: docs/INTEGRITY_AUDIT_2026-10-22.md section 6 records section 2.5.4 as RESOLVED. The tracked copy data/frozen_model_manifest.json (byte-identical) and the 2026-10-07 recompute manifest (SHA-256 2614f042..., differs only in created_at_utc and prospective_holdout_after) are labelled LEGACY and DERIVED via adjacent notes and are read by nothing in src/. Production code, the live path and forecast output are unchanged; nothing was deleted. Commits dedc74a (docs), 5910051 (labels), 95cca61 (guard test). Tests: 5 new, 269 total passing.",
+  "watching_for": "Any module or doc that starts naming data/frozen_model_manifest.json or the rolling_recompute_20261007 manifest as truth, and any drift between the live manifest and the labelled LEGACY copy.",
+  "next_action": "On refreeze, update the live manifest, the LEGACY note sha256 and audit section 6 in one commit.",
   "deployed": false,
-  "git_commit": "",
+  "git_commit": "95cca61",
   "check_back": {
     "kind": "grade_event",
-    "label": "after a week of games",
-    "target": null,
-    "baseline": "2026-10-13T01:04:56+00:00",
+    "label": "frozen-manifest resolution shipped",
+    "baseline": "2026-10-23T15:31:41+00:00",
     "events": [],
-    "target_date": null,
-    "monitoring": false
+    "target_date": null
   },
   "docs": [
     {
-      "label": "Next check-in",
-      "path": "docs/NEXT_CHECKIN.md"
+      "label": "Integrity audit (section 6)",
+      "path": "docs/INTEGRITY_AUDIT_2026-10-22.md"
     },
     {
       "label": "Project handoff",
       "path": "docs/project_handoff.md"
     },
     {
-      "label": "Azure deployment",
-      "path": "docs/azure_deployment.md"
+      "label": "Frozen manifest guard test",
+      "path": "tests/test_frozen_manifest_source_of_truth.py"
+    },
+    {
+      "label": "Legacy copy label",
+      "path": "data/frozen_model_manifest.LEGACY.md"
     }
   ]
 }
