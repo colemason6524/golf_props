@@ -44,10 +44,12 @@ GRADING_ROOT = PROJECT_ROOT / "data/interim/reports/forecast_grading"
 # Preserved raw CBS leaderboard pages, one directory per event_key.
 PROSPECTIVE_RESULTS_ROOT = PROJECT_ROOT / "data/raw/prospective_results"
 # Historical rolling expectation used as a reference column in the report.
-DEFAULT_ROLLING_METRICS = (
-    PROJECT_ROOT
-    / "data/interim/reports/rolling_round_simulation_validation/aggregate_metrics.csv"
-)
+# `rolling-simulation-validation` writes a fresh ``rolling_recompute_<YYYYMMDD>/``
+# directory on every run, so the reference is resolved to the newest one rather
+# than pinned to a literal path.  The previously pinned path
+# (``rolling_round_simulation_validation/aggregate_metrics.csv``) has never
+# existed in this repository; see docs/INTEGRITY_AUDIT_2026-10-22.md.
+ROLLING_RECOMPUTE_GLOB = "rolling_recompute_*/aggregate_metrics.csv"
 
 DEFAULT_DASHBOARD_PROJECT = "golf_props"
 DASHBOARD_TIMEOUT_SECONDS = 60
@@ -123,22 +125,17 @@ def _dashboard_checkpoint(
 def _rolling_metrics_path() -> Optional[Path]:
     """Resolve the rolling-metrics reference the grader needs.
 
-    The Bank of Utah manual grade used the recompute output; prefer an explicit
-    override, then the documented validation path, then the newest recompute
-    directory so the loop keeps working after a re-run.
+    Prefer an explicit override, then the newest recompute directory, so the
+    loop keeps working across re-runs instead of depending on one dated path.
     """
     candidates: list[Path] = []
     override = os.environ.get("GOLF_PROPS_ROLLING_METRICS")
     if override:
         candidates.append(Path(override).expanduser())
-    candidates.append(DEFAULT_ROLLING_METRICS)
     reports_root = PROJECT_ROOT / "data/interim/reports"
     if reports_root.exists():
         candidates.extend(
-            sorted(
-                reports_root.glob("rolling_recompute_*/aggregate_metrics.csv"),
-                reverse=True,
-            )
+            sorted(reports_root.glob(ROLLING_RECOMPUTE_GLOB), reverse=True)
         )
     for candidate in candidates:
         if candidate.exists():

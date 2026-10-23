@@ -169,8 +169,9 @@ tee and is the project's primary prospective artifact:**
 
 - preserved CBS final leaderboard:
   `data/raw/prospective_results/tour_championship_2026/`;
-- grade artifacts:
-  `data/interim/reports/prospective_forecast_grades/tour_championship_2026/`;
+- grade artifacts: none in this repository — that grade was produced on the
+  retired Mac workspace and never carried over or committed
+  (`docs/INTEGRITY_AUDIT_2026-10-22.md` §2.5.2);
 - Scottie Scheffler had the highest forecast winner probability (17.065%) and
   won the event;
 - J.J. Spaun was excluded under the established withdrawal rule (`WD`, zero
@@ -1049,7 +1050,8 @@ verify the non-promotion decision after course identity is repaired.
   `docs/research_narrative.md`
 - Continuation prompt:
   `docs/continuation_prompt.md`
-- Performance audit:
+- Performance audit: no copy in this repository and never in git history;
+  `audit-performance-data` regenerates it at
   `data/interim/reports/performance_data_audit/report.md`
 - Reviewed course crosswalk:
   `config/course_aliases.csv`
@@ -1058,24 +1060,25 @@ verify the non-promotion decision after course identity is repaired.
 - Round build:
   `data/interim/reports/round_performance/report.md`
 - Rolling report:
-  `data/interim/reports/rolling_round_simulation_validation/report.md`
+  `data/interim/reports/rolling_recompute_20261007/report.md`
 - Frozen incumbent:
   `data/interim/reports/rolling_round_simulation_validation/frozen_model_manifest.json`
 - Frozen current-event output contract:
   `strengths.csv`, `predictions.csv`, `report.md`, and `run_manifest.json`
   under the selected event output directory
-- First prospective grade:
-  `data/interim/reports/prospective_forecast_grades/tour_championship_2026/`
+- Prospective grades present in this repository:
+  `data/interim/reports/forecast_grading/bank_of_utah_championship_2026/` and
+  `.../baycurrent_classic_2026/` (the live root is `GRADING_ROOT`)
 - Wyndham 2026 retrospective dry-run:
   `data/interim/reports/wyndham_championship_2026_frozen_simulation/`
   (labeled `retrospective_replay`; not prospective evidence)
 - Wyndham field notes:
   `data/raw/fields/wyndham_championship_2026_field.csv`
   `data/raw/fields/wyndham_championship_2026_field_notes.md`
-- Course challenger report:
-  `data/interim/reports/course_challenger_validation/report.md`
-- Course challenger manifest:
-  `data/interim/reports/course_challenger_validation/challenger_manifest.json`
+- Course challenger report and manifest: no copy in this repository and never
+  in git history; `course-challenger-validation` regenerates
+  `data/interim/reports/course_challenger_validation/report.md` and
+  `challenger_manifest.json`
 - Bovada collector report:
   `data/interim/reports/bovada_golf_odds_collection/report.md`
 - Azure deployment:

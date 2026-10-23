@@ -6,11 +6,11 @@
     "verified": true
   },
   "artifact_sha256": {
-    "graded_predictions": "c5b365bb1be3aaf20050c87e3b923e4402083e37c34054834e18a1d0431427e2",
-    "metrics": "2cc3b6e6aff6723f92c9c81d0cc062c4441208fedb8f239eb134c7bee0aff10a",
-    "report": "cf18350ed0b1be8beb4a897169893087640370c4a713fb7bc94af382bbf69d4e"
+    "graded_predictions": "3cdc62b390077ffd5714241b866c50987c252a9672ba4b6a1c23b5a76afda55e",
+    "metrics": "47adb17163598897bf26477eef2c421fdcc0aa6490cc3bb816bdd84fd056b1d8",
+    "report": "cf453ebfe0b8fb407bdbc1115e8423080b7704515d753ac47ff40fc53e798da0"
   },
-  "created_at_utc": "2026-10-07T03:52:20.545764+00:00",
+  "created_at_utc": "2026-10-23T07:14:56.129357+00:00",
   "event_name": "Bank of Utah Championship",
   "excluded_players": [
     "Austin Eckroat",
@@ -26,11 +26,10 @@
   "forecast_players_without_results": [
     "K.H. Lee",
     "Lanto Griffin",
-    "Rasmus H\u00f8jgaard",
     "Taylor Pendrith"
   ],
   "frozen_parameters_changed": false,
-  "graded_players_per_target": 107,
+  "graded_players_per_target": 108,
   "graded_targets": [
     "top20",
     "top10",
@@ -43,13 +42,14 @@
     "results_page": "11c4612032b57d2b8bb59f146f3d5c9daa908b773061685f1dbefc0293a2ccb6",
     "rolling_metrics": "1140b6aa7912266a64155fa560cf2bd6a6a80c76637af686c833f894a2ab6161"
   },
-  "intersection_players": 111,
+  "intersection_players": 112,
   "name_aliases_applied": [
     "Ben James (a) <-> Benjamin James",
     "Bowen Mauss (a) <-> Bowen Mauss",
     "Bracken, Boston <-> Boston Bracken",
     "Jackson Koivun (a) <-> Jackson Koivun",
     "Kihei Akina (a) <-> Kihei Akina",
+    "Rasmus H\u00f8jgaard <-> Rasmus Hojgaard",
     "S\u00e9amus Power <-> Seamus Power",
     "Ventura, Kristoffer <-> Kris Ventura",
     "Zach Bauchou <-> Zachary Bauchou",
@@ -66,7 +66,6 @@
     "Kevin Streelman",
     "Matt Snyder",
     "Nick Hardy",
-    "Rasmus Hojgaard",
     "Rhett Rasmussen",
     "Seonghyeon An",
     "Tyler Duncan",

@@ -54,8 +54,8 @@ Updated 2026-10-01. Read after `docs/project_handoff.md`.
 ## 5) Leave-off pointer
 
 - `docs/project_handoff.md` — "Exact Stopping Point" (2026-10-01 session block).
-- Grade artifacts will live under
-  `data/interim/reports/prospective_forecast_grades/bank_of_utah_championship_2026/`.
+- Grade artifacts live under
+  `data/interim/reports/forecast_grading/bank_of_utah_championship_2026/`.
 
 ## 6) Small later ideas (pick at most one)
 

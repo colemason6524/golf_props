@@ -328,9 +328,16 @@ PYTHONPATH=src python3 -m golf_props.cli verify-forecast-archive \
 PYTHONPATH=src python3 -m golf_props.cli grade-forecast \
   --archive-dir data/interim/reports/prospective_forecasts/<event_key> \
   --results-page data/raw/prospective_results/<event_key>/<leaderboard>.html \
-  --rolling-metrics data/interim/reports/rolling_round_simulation_validation/aggregate_metrics.csv \
-  --output-dir data/interim/reports/prospective_forecast_grades/<event_key>
+  --rolling-metrics data/interim/reports/rolling_recompute_20261007/aggregate_metrics.csv \
+  --output-dir data/interim/reports/forecast_grading/<event_key>
 ```
+
+`--rolling-metrics` supplies only the historical-reference column of the grade
+report. The weekly loop does not take it: it resolves the newest
+`data/interim/reports/rolling_recompute_*/aggregate_metrics.csv` itself (or
+`$GOLF_PROPS_ROLLING_METRICS` when set). Grades are written under
+`data/interim/reports/forecast_grading/<event_key>/`, which is
+`pipelines/post_event_grading.py::GRADING_ROOT`.
 
 - Source policy: the CBS schedule is discovery only; field evidence comes from
   the official PGA TOUR website. Tee times are optional. Sportsbook sources are

@@ -93,8 +93,10 @@ Current prospective state and exact next task:
    winner and won. All four requested Brier scores beat structural baseline;
    all were worse than historical rolling aggregates. One event is not enough
    to retune or claim stable calibration.
-2. Grade artifacts are under
-   `data/interim/reports/prospective_forecast_grades/tour_championship_2026/`;
+2. That TOUR Championship grade was produced on the retired Mac workspace; no
+   copy of its artifacts is in this repository and none has ever been
+   committed (`docs/INTEGRITY_AUDIT_2026-10-22.md` §2.5.2). Grades that do
+   exist here are under `data/interim/reports/forecast_grading/<event_key>/`;
    `make_cut` was excluded and J.J. Spaun's zero-round WD left 29 graded rows.
 3. Biltmore Championship Asheville is the current reviewed event (2026-09-17 to
    2026-09-20), but the Azure workflow is still `awaiting_field`; no Biltmore
