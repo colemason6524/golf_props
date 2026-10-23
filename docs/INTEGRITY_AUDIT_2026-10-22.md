@@ -21,6 +21,11 @@ Status: complete. Steps 1–4 landed as `cec633a`, `453177c`, `b9a1a77`,
 `576e7d8`; §3 is the step-3 inventory, §4 the applied fixes and the verdict,
 §5 the evidence index.
 
+Status update (2026-10-23): §2.5.4 — the three frozen manifests — is
+**RESOLVED** by designating the live path as the single source of truth and
+labelling the other two legacy/derived. See §6. Production code behaviour
+is unchanged.
+
 ---
 
 ## 1. Record map
@@ -346,6 +351,11 @@ is the orphan. Pinning which copy is canonical — and deciding whether the live
 one should be tracked — is a policy call, so this is documented, not changed;
 the params are provably equal, so today the split changes nothing about the
 forecast. It changes a great deal about reproducibility: see §3.5.
+
+**RESOLVED (2026-10-23):** the live path above is designated the single source
+of truth for the frozen model configuration, and the tracked copy plus the
+2026-10-07 recompute manifest are labelled legacy/derived with nothing reading
+them as truth. §6 records the resolution; no production behaviour changed.
 
 #### 2.5.5 Split source of truth in git
 
@@ -883,3 +893,58 @@ b9a1a77  step 3 — dead-code, dead-doc and legacy-surface inventory (§3)
 
 All four are on `main` and pushed to `origin/main`. Nothing was published
 anywhere else.
+
+## 6. Frozen manifest: single source of truth (2026-10-23)
+
+**Resolution of §2.5.4 and of the §3.5 correction recorded in §2.5.4 / §3.6.**
+Approved by the repo owner, 2026-10-23. Production behaviour is unchanged: the
+live path is still the one `pipelines/weekly_forecast.py:113-117`
+(`WeeklyPaths.manifest`) hard-codes, and nothing was repointed.
+
+### 6.1 The one manifest the production loop loads
+
+`data/interim/reports/rolling_round_simulation_validation/frozen_model_manifest.json`
+— SHA-256 `8ee96b9f6567b93ec0cb0d36f1477fa7d193124d96298d4cd914800f70a54291`,
+`created_at_utc` 2026-08-06, `prospective_holdout_after` 2026-08-06 — is **the
+source of truth** for the frozen model configuration: 365-day half-life,
+8-round prior, 20 variance-prior rounds, cut size 65. It is the only manifest
+any module under `src/` loads, and every operational document and command in
+this repository points at it (`README.md`, `docs/project_handoff.md`,
+`docs/windows_deployment.md`, `docs/azure_deployment.md`).
+
+It stays untracked (`data/interim/` is gitignored) exactly as before. Tracking
+it, or generating it from a provisioning script, is a separate storage policy
+decision and was deliberately **not** made here — §3.6 remains open on its own
+terms.
+
+### 6.2 The other two are legacy/derived and nothing reads them
+
+| File | Status | Read by `src/` |
+| --- | --- | --- |
+| `data/frozen_model_manifest.json` | **legacy** — tracked, byte-identical copy (same SHA-256 `8ee96b9f…`) of the live manifest, kept as a clone-reachable reference | no |
+| `data/interim/reports/rolling_recompute_20261007/frozen_model_manifest.json` | **derived** — output of the 2026-10-07 recompute (SHA-256 `2614f042…`); parameters identical to the live manifest, differing only in `created_at_utc` and `prospective_holdout_after` | no |
+
+Each carries an adjacent note stating what it is, why it exists, and that
+nothing reads it as truth: `data/frozen_model_manifest.LEGACY.md` and
+`data/interim/reports/rolling_recompute_20261007/frozen_model_manifest.DERIVED.md`.
+
+Nothing was deleted. The tracked copy is a provable byte-for-byte duplicate of
+the live manifest, but the approved resolution was labelling, not deletion, so
+it stays in the tree and in git.
+
+### 6.3 Regression guard
+
+`tests/test_frozen_manifest_source_of_truth.py` asserts that (a) the only
+`frozen_model_manifest.json` path named in production code is the live path, on
+`weekly_forecast.py::WeeklyPaths`; (b) the frozen-manifest writer in
+`backtest/rolling_simulation_validation.py` writes into the live directory; and
+(c) neither legacy/derived copy is referenced by any module under `src/`. The
+test also fails if a legacy note is removed while its JSON remains, so the
+labels cannot rot away silently.
+
+### 6.4 What this does not claim
+
+This section pins *which* file is truth. It does not make truth reproducible
+from a clone: the live manifest and four other `WeeklyPaths` inputs are still
+untracked (§3.6), and the parameters were already proven equal, so no forecast
+output changed.

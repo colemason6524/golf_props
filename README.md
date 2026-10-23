@@ -493,8 +493,11 @@ remains unchanged.
   parameter-selection uncertainty.
 - The frozen future configuration must only be evaluated on tournaments
   starting after both the source-data cutoff and model-freeze date recorded in
-  `frozen_model_manifest.json`. Previously inspected events must not be reused
-  as a supposedly untouched holdout.
+  the frozen model manifest
+  (`data/interim/reports/rolling_round_simulation_validation/frozen_model_manifest.json`,
+  the single source of truth for the frozen configuration; see
+  `docs/INTEGRITY_AUDIT_2026-10-22.md` §6). Previously inspected events must not
+  be reused as a supposedly untouched holdout.
 - Event-relative score is a public-data proxy, not official ShotLink strokes
   gained. The cut model currently assumes ordinary 72-hole stroke play with a
   top-65-and-ties cut.

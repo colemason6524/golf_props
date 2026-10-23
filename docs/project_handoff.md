@@ -1061,7 +1061,9 @@ verify the non-promotion decision after course identity is repaired.
   `data/interim/reports/round_performance/report.md`
 - Rolling report:
   `data/interim/reports/rolling_recompute_20261007/report.md`
-- Frozen incumbent:
+- Frozen incumbent (the single source of truth for the frozen model
+  configuration; nothing else is read by production — see
+  `docs/INTEGRITY_AUDIT_2026-10-22.md` §6):
   `data/interim/reports/rolling_round_simulation_validation/frozen_model_manifest.json`
 - Frozen current-event output contract:
   `strengths.csv`, `predictions.csv`, `report.md`, and `run_manifest.json`
