@@ -98,6 +98,11 @@ NIGHT_BEFORE_HOURS_BEFORE = 22
 DEFAULT_BOVADA_SNAPSHOT = (
     PROJECT_ROOT / "data" / "processed" / "odds_snapshots" / "bovada_golf_latest.csv"
 )
+DEFAULT_BOVADA_RAW = PROJECT_ROOT / "data" / "raw" / "odds_snapshots" / "bovada_golf_latest.json"
+DEFAULT_BOVADA_REPORT = (
+    PROJECT_ROOT / "data" / "interim" / "reports" / "bovada_golf_odds_collection" / "report.md"
+)
+DEFAULT_ODDS_ARCHIVE = PROJECT_ROOT / "data" / "raw" / "odds_snapshots" / "archive"
 
 
 class WeeklyForecastError(ValueError):
@@ -116,9 +121,9 @@ class WeeklyPaths:
     )
     round_performance: Path = (
         PROJECT_ROOT
-        / "data/interim/features/pga_2001_2026_round_performance.csv"
+        / "data/interim/features/pga_2001_2026_20261104_round_performance.csv"
     )
-    canonical_dir: Path = PROJECT_ROOT / "data/processed/pga_2001_2026"
+    canonical_dir: Path = PROJECT_ROOT / "data/processed/pga_2001_2026_20261104"
     aliases: Path = PROJECT_ROOT / "config/player_aliases.csv"
     registry: Path = DEFAULT_REGISTRY_PATH
     weekly_dir: Path = PROJECT_ROOT / "data/interim/weekly"
@@ -835,6 +840,21 @@ def _run_forecast(
     if run_manifest_path.exists():
         run_manifest = json.loads(run_manifest_path.read_text(encoding="utf-8"))
         run_manifest["timing_source"] = "exact_tee_times" if ec.tee_time_source else "schedule_date_fallback"
+        try:
+            from golf_props.analysis.history_freshness import assess_history_freshness
+
+            run_manifest["history_freshness"] = assess_history_freshness(
+                canonical_dir=paths.canonical_dir,
+                schedule_path=paths.raw_schedule_dir / "schedule.html",
+                as_of_date=utc_now().date().isoformat(),
+                frozen_manifest=paths.manifest,
+            )
+        except Exception as exc:
+            run_manifest["history_freshness"] = {
+                "schema_version": 1,
+                "status": "unknown",
+                "reason": f"{type(exc).__name__}: {exc}",
+            }
         run_manifest_path.write_text(
             json.dumps(run_manifest, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
@@ -852,6 +872,7 @@ def _run_forecast(
     ec.save(paths.event_control_path(ec.event_key))
     notification = "not_configured"
     if os.environ.get("GOLF_PROPS_DISCORD_WEBHOOK_URL"):
+        _ensure_price_capture(archive_dir)
         delivery_dir = PROJECT_ROOT / "data/interim/reports/forecast_delivery" / ec.event_key
         try:
             result = publish_board(archive_dir, delivery_dir)
@@ -863,6 +884,36 @@ def _run_forecast(
             "notification": notification,
             "withdrawals_removed": wd_removed,
             "withdrawal_check": wd_diag}
+
+
+def _ensure_price_capture(archive_dir: Path) -> None:
+    """Try one existing-collector capture when the board has no usable prices.
+
+    This never blocks the immutable archive or a board publication; a failed
+    collection simply leaves the board honestly unpriced. It only runs in a
+    publishing runtime, so tests and offline research do not call the network.
+    """
+    try:
+        from golf_props.notifications.discord import build_board
+        from golf_props.odds.bovada import collect_bovada_golf_odds
+
+        board = build_board(archive_dir)
+        readiness = (board.get("odds") or {}).get("readiness") or {}
+        if readiness.get("state") not in {
+            "capture_missing",
+            "capture_empty",
+            "event_not_offered",
+        }:
+            return
+        collect_bovada_golf_odds(
+            DEFAULT_BOVADA_SNAPSHOT,
+            raw_output=DEFAULT_BOVADA_RAW,
+            report_output=DEFAULT_BOVADA_REPORT,
+            archive_dir=DEFAULT_ODDS_ARCHIVE,
+            weekly_dir=PROJECT_ROOT / "data" / "interim" / "weekly",
+        )
+    except Exception:
+        return
 
 
 def _notify_ops(message: str) -> None:
@@ -900,8 +951,24 @@ def _write_health(paths: WeeklyPaths, status: dict[str, Any]) -> None:
             "archive_path": status.get("archive_path"),
             "recorded_at_utc": iso_timestamp(utc_now()),
         }
+    try:
+        from golf_props.analysis.history_freshness import assess_history_freshness
+
+        history_freshness = assess_history_freshness(
+            canonical_dir=paths.canonical_dir,
+            schedule_path=paths.raw_schedule_dir / "schedule.html",
+            as_of_date=utc_now().date().isoformat(),
+            frozen_manifest=paths.manifest,
+        )
+    except Exception as exc:  # health must always be writable
+        history_freshness = {
+            "schema_version": 1,
+            "status": "unknown",
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
     health = {
         "updated_at_utc": iso_timestamp(utc_now()),
+        "history_freshness": history_freshness,
         "state": status.get("state", ""),
         "current_event_key": current_key,
         "current_event_name": status.get("event_name", ""),
@@ -959,6 +1026,21 @@ def _finalize(
         except (ValueError, TypeError):
             status["time_remaining_seconds"] = None
     paths.status_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        from golf_props.analysis.history_freshness import assess_history_freshness
+
+        status["history_freshness"] = assess_history_freshness(
+            canonical_dir=paths.canonical_dir,
+            schedule_path=paths.raw_schedule_dir / "schedule.html",
+            as_of_date=utc_now().date().isoformat(),
+            frozen_manifest=paths.manifest,
+        )
+    except Exception as exc:
+        status["history_freshness"] = {
+            "schema_version": 1,
+            "status": "unknown",
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
     paths.status_path.write_text(
         json.dumps(status, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

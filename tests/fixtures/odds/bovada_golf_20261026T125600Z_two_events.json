@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "source": "Bovada",
+  "source_api_url": "https://www.bovada.lv/services/sports/event/coupon/events/A/description/golf/pga-tour",
+  "captured_at_utc": "2026-10-26T12:56:00.947497Z",
+  "event_names": ["Mexico Open", "VidantaWorld Mexico Open"],
+  "market_counts": {"winner": 2},
+  "row_count": 2,
+  "pre_start": true,
+  "pre_start_basis": "captured_before_date_only_competitive_start",
+  "competitive_start": {
+    "Mexico Open": {"state": "date_only", "competitive_start_date": "2026-10-29"},
+    "VidantaWorld Mexico Open": {"state": "date_only", "competitive_start_date": "2026-10-29"}
+  },
+  "prices_are_public": false,
+  "selection_policy": "undefined",
+  "rows": [
+    {
+      "odds_id": "odds_two_events_alias",
+      "event_name": "Mexico Open",
+      "season": "2026",
+      "player_name": "Player A",
+      "sportsbook": "Bovada",
+      "market_type": "winner",
+      "market_name": "Winner",
+      "selection_name": "Player A",
+      "price_american": 1100,
+      "price_decimal": 12.0,
+      "implied_probability": 0.083333,
+      "captured_at_utc": "2026-10-26T12:56:00.947497Z",
+      "source_url": "https://www.bovada.lv/golf/pga-tour/mexico-open/mexico-open-202610290930",
+      "market_status": "open",
+      "provider_event_id": "prov-ev-1",
+      "provider_market_id": "prov-mk-1",
+      "provider_outcome_id": "prov-oc-a",
+      "provider_price_id": "prov-pr-a"
+    },
+    {
+      "odds_id": "odds_two_events_exact",
+      "event_name": "VidantaWorld Mexico Open",
+      "season": "2026",
+      "player_name": "Player A",
+      "sportsbook": "Bovada",
+      "market_type": "winner",
+      "market_name": "Winner",
+      "selection_name": "Player A",
+      "price_american": 1200,
+      "price_decimal": 13.0,
+      "implied_probability": 0.076923,
+      "captured_at_utc": "2026-10-26T12:56:00.947497Z",
+      "source_url": "https://www.bovada.lv/golf/pga-tour/vidantaworld-mexico-open/event-2",
+      "market_status": "open",
+      "provider_event_id": "prov-ev-2",
+      "provider_market_id": "prov-mk-2",
+      "provider_outcome_id": "prov-oc-a2",
+      "provider_price_id": "prov-pr-a2"
+    }
+  ]
+}

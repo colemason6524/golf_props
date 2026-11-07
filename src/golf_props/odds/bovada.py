@@ -12,6 +12,8 @@ from typing import Any, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from golf_props.odds.event_identity import event_name_key
+
 from golf_props.normalization.manual_odds import (
     american_to_decimal,
     american_to_implied_probability,
@@ -209,6 +211,9 @@ def parse_bovada_payload(
                                     price.get("id"),
                                     captured_at_utc,
                                 ),
+                                # Canonical join keys stay blank when no
+                                # canonical mapping exists; the provider ids
+                                # below are the honest, unambiguous provenance.
                                 "event_id": "",
                                 "event_name": event_name,
                                 "season": season,
@@ -226,6 +231,18 @@ def parse_bovada_payload(
                                 "source_url": source_url(event_link, source_api_url),
                                 "market_status": market_status,
                                 "is_closing_candidate": False,
+                                # Provenance-only keys.  They are ignored by
+                                # the canonical CSV writer so the latest
+                                # consumer contract is unchanged.
+                                "provider_event_id": str(event.get("id") or ""),
+                                "provider_market_id": str(market.get("id") or ""),
+                                "provider_outcome_id": str(outcome.get("id") or ""),
+                                "provider_price_id": str(price.get("id") or ""),
+                                "lookup_status": (
+                                    "provider_ids_present; canonical_event_and_player_unmapped"
+                                    if player_name
+                                    else "provider_ids_present; player_name_unresolved"
+                                ),
                             }
                         )
     return rows
@@ -265,6 +282,186 @@ def write_summary(rows: list[dict[str, object]], output_path: Path, source_api_u
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+# --------------------------------------------------------------------------
+# Immutable timestamped snapshots
+# --------------------------------------------------------------------------
+#
+# The collector has always overwritten one "latest" CSV/JSON pair, which loses
+# every earlier capture.  Snapshots below are additive: same collector call,
+# same free endpoint, same latest-path contract, plus one immutable
+# ``bovada_golf_<UTC stamp>.json`` (+ parsed CSV) per capture.
+
+SNAPSHOT_SCHEMA_VERSION = 1
+
+
+def snapshot_stamp(captured_at_utc: str) -> str:
+    text = str(captured_at_utc).strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise BovadaOddsError(f"invalid capture timestamp: {captured_at_utc}") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _match_key(value: object) -> str:
+    """Formatting-only event key; initialism matches require corroboration."""
+    return event_name_key(value)
+
+
+def resolve_competitive_start(weekly_dir: Path, event_name: str) -> dict[str, object]:
+    """Look up existing competitive-start evidence for one event.
+
+    Only already-persisted ``event_control.json`` evidence is used.  A date-only
+    ``competitive_start_date`` cannot prove an intraday ordering, so it is
+    reported as ``date_only`` rather than assumed to allow ``pre_start``.
+    """
+    target = _match_key(event_name)
+    if not weekly_dir.exists():
+        return {"state": "unknown", "source": "weekly_dir_missing"}
+    for control_path in sorted(weekly_dir.glob("*/event_control.json")):
+        try:
+            data = json.loads(control_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if _match_key(data.get("event_name")) != target:
+            continue
+        tee_source = data.get("tee_time_source")
+        # A ``first_tee_at_utc`` copied from the official start date is a
+        # date-derived fallback, not proof of an exact competitive start.
+        if (
+            data.get("first_tee_at_utc")
+            and isinstance(tee_source, dict)
+            and tee_source.get("earliest_tee_at_utc")
+        ):
+            return {
+                "state": "known_start",
+                "start_at_utc": str(data["first_tee_at_utc"]),
+                "competitive_start_date": data.get("competitive_start_date") or "",
+                "event_key": data.get("event_key") or control_path.parent.name,
+                "source": "event_control.first_tee_at_utc+tee_time_evidence",
+            }
+        if data.get("competitive_start_date") or data.get("official_start_at_utc"):
+            return {
+                "state": "date_only",
+                "start_at_utc": None,
+                "competitive_start_date": str(
+                    data.get("competitive_start_date")
+                    or data.get("official_start_at_utc")
+                    or ""
+                ),
+                "event_key": data.get("event_key") or control_path.parent.name,
+                "source": (
+                    "event_control.competitive_start_date"
+                    if data.get("competitive_start_date")
+                    else "event_control.official_start_at_utc"
+                ),
+            }
+    return {"state": "unknown", "source": "no_matching_event_control"}
+
+
+def resolve_pre_start(
+    captured_at_utc: str, competitive_start: dict[str, object]
+) -> tuple[Optional[bool], str]:
+    """Tri-state ``pre_start``: true/false only with exact start evidence."""
+    if competitive_start.get("state") != "known_start":
+        return None, str(competitive_start.get("source") or "no_competitive_start_evidence")
+    start = str(competitive_start.get("start_at_utc") or "")
+    captured = str(captured_at_utc).replace("Z", "+00:00")
+    try:
+        start_at = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        captured_at = datetime.fromisoformat(captured)
+    except ValueError:
+        return None, "unparseable_timestamp"
+    if captured_at.tzinfo is None:
+        captured_at = captured_at.replace(tzinfo=timezone.utc)
+    if start_at.tzinfo is None:
+        start_at = start_at.replace(tzinfo=timezone.utc)
+    return captured_at < start_at, "captured_before_first_tee" if captured_at < start_at else "captured_after_first_tee"
+
+
+def write_snapshot(
+    payload: Any,
+    rows: list[dict[str, object]],
+    archive_dir: Path,
+    captured_at_utc: str,
+    source_api_url: str = DEFAULT_PGA_URL,
+    weekly_dir: Optional[Path] = None,
+) -> dict[str, object]:
+    """Write one immutable snapshot pair; never overwrite an existing capture."""
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    stamp = snapshot_stamp(captured_at_utc)
+    json_path = archive_dir / f"bovada_golf_{stamp}.json"
+    csv_path = archive_dir / f"bovada_golf_{stamp}.csv"
+    if json_path.exists() or csv_path.exists():
+        raise BovadaOddsError(
+            f"snapshot already exists for capture {captured_at_utc}: {json_path.name}"
+        )
+    event_names = sorted({str(row["event_name"]) for row in rows if row.get("event_name")})
+    market_counts: dict[str, int] = {}
+    for row in rows:
+        market_counts[str(row["market_type"])] = market_counts.get(str(row["market_type"]), 0) + 1
+    windows = {}
+    if weekly_dir is not None:
+        windows = {
+            name: resolve_competitive_start(weekly_dir, name) for name in event_names
+        }
+    pre_start: Optional[bool]
+    basis: str
+    if weekly_dir is None:
+        pre_start, basis = None, "no_weekly_dir_supplied"
+    elif len(windows) == 1:
+        pre_start, basis = resolve_pre_start(captured_at_utc, next(iter(windows.values())))
+    elif not windows:
+        pre_start, basis = None, "no_event_name_in_payload"
+    else:
+        pre_start, basis = None, "multiple_events_in_snapshot"
+    snapshot = {
+        "schema_version": SNAPSHOT_SCHEMA_VERSION,
+        "source": SPORTSBOOK,
+        "source_api_url": source_api_url,
+        "captured_at_utc": captured_at_utc,
+        "event_names": event_names,
+        "market_counts": market_counts,
+        "row_count": len(rows),
+        "pre_start": pre_start,
+        "pre_start_basis": basis,
+        "competitive_start": windows,
+        "provider_id_fields": [
+            "provider_event_id",
+            "provider_market_id",
+            "provider_outcome_id",
+            "provider_price_id",
+        ],
+        "canonical_join_status": (
+            "event_id and player_id are canonical keys; when blank, use the "
+            "provider ids plus player_name (no invented ids)"
+        ),
+        "prices_are_public": False,
+        "selection_policy": "undefined",
+        "rows": rows,
+        "raw_payload": payload,
+    }
+    json_path.write_text(
+        json.dumps(snapshot, indent=2, sort_keys=True, default=str) + "\n",
+        encoding="utf-8",
+    )
+    with csv_path.open("x", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=ODDS_SNAPSHOTS_COLUMNS, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+    return {
+        "json_path": json_path,
+        "csv_path": csv_path,
+        "pre_start": pre_start,
+        "pre_start_basis": basis,
+    }
+
+
 def collect_bovada_golf_odds(
     output: Path,
     raw_output: Optional[Path] = None,
@@ -272,7 +469,9 @@ def collect_bovada_golf_odds(
     url: str = DEFAULT_PGA_URL,
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
     include_unmapped: bool = False,
-) -> dict[str, object]:
+    archive_dir: Optional[Path] = None,
+    weekly_dir: Optional[Path] = None,
+) -> dict[str, Any]:
     captured_at_utc = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     payload = fetch_json(url, timeout_seconds=timeout_seconds)
     if raw_output is not None:
@@ -286,10 +485,21 @@ def collect_bovada_golf_odds(
     write_odds_csv(rows, output)
     if report_output is not None:
         write_summary(rows, report_output, url)
+    snapshot: Optional[dict[str, object]] = None
+    if archive_dir is not None:
+        snapshot = write_snapshot(
+            payload,
+            rows,
+            archive_dir,
+            captured_at_utc,
+            source_api_url=url,
+            weekly_dir=weekly_dir,
+        )
     return {
         "output": output,
         "raw_output": raw_output,
         "report_output": report_output,
         "rows": rows,
         "captured_at_utc": captured_at_utc,
+        "snapshot": snapshot,
     }

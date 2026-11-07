@@ -4,12 +4,19 @@ from pathlib import Path
 from golf_props.cli import main
 from golf_props.ingestion.cbs_results import extract_schedule_events
 from golf_props.normalization.cbs_results import (
+    FINALITY_FINAL,
+    FINALITY_IN_PROGRESS,
+    FINALITY_UNKNOWN,
+    analyze_leaderboard_finality,
     leaderboard_is_final,
     normalize_directory,
     parse_leaderboard_rows,
     parse_money,
 )
 from golf_props.normalization.merge_results import merge_directories
+
+FIXTURES = Path(__file__).parent / "fixtures"
+BERMUDA_FINAL_PAGE = FIXTURES / "cbs_final_leaderboard_bermuda_excerpt.html"
 
 
 SCHEDULE_HTML = """
@@ -241,3 +248,99 @@ def test_cli_cbs_commands(tmp_path):
 
     assert main(["normalize-cbs-results", "--input-dir", str(raw_dir), "--output-dir", str(out_dir)]) == 0
     assert (out_dir / "events.csv").exists()
+
+
+# --------------------------------------------------------------------------
+# Tri-state finality: the player leaderboard decides, never a navigation table
+# --------------------------------------------------------------------------
+
+NAV_TABLE = (
+    "<table><thead><tr><th>Playoffs</th></tr></thead><tbody>"
+    '<tr class="TableBase-bodyTr"><td>Hole</td><td>1</td></tr></tbody></table>'
+)
+
+
+def _live_table(header_cells=("pos", "to par", "thru", "today", "r1", "r2", "r3", "r4", "total")):
+    header = "".join(f"<th>{cell}</th>" for cell in ("", *header_cells))
+    rows = []
+    for position, name in (("T1", "M. Brennan"), ("T1", "A. Smotherman")):
+        rows.append(
+            '<tr class="TableBase-bodyTr GolfLeaderboard-bodyTr">'
+            "<td></td><td>" + position + "</td><td></td>"
+            '<td><span class="CellPlayerName--long"><a>' + name + "</a></span></td>"
+            "<td>-13</td><td>3*</td><td>E</td><td>68*</td><td>67</td><td>65</td>"
+            "<td>-</td><td>200</td></tr>"
+        )
+    return f"<table><thead><tr>{header}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+
+
+def test_real_captured_page_with_navigation_table_is_final():
+    page = BERMUDA_FINAL_PAGE.read_text(encoding="utf-8")
+    result = analyze_leaderboard_finality(page)
+
+    assert result["state"] == FINALITY_FINAL
+    assert result["evidence"]["table_found"] is True
+    assert result["evidence"]["skipped_table_count"] == 1  # the Playoffs nav table
+    assert "earnings" in result["evidence"]["header_cells"]
+    # Shortened event: every row has r4 "-", and that must not matter.
+    assert parse_leaderboard_rows(page)[0]["round_scores"][3] is None
+
+
+def test_real_page_rows_keep_terminal_statuses_and_the_winner():
+    page = BERMUDA_FINAL_PAGE.read_text(encoding="utf-8")
+    positions = [row["position"] for row in parse_leaderboard_rows(page)]
+
+    assert positions[0] == "1"
+    assert "WD" in positions  # a withdrawal row never blocks finality or grading
+    assert any(position[0].isdigit() for position in positions)
+
+
+def test_live_layout_is_in_progress_even_with_a_navigation_table_first():
+    page = NAV_TABLE + _live_table()
+    result = analyze_leaderboard_finality(page)
+
+    assert result["state"] == FINALITY_IN_PROGRESS
+    assert result["reason"] == "live_header_columns"
+    assert leaderboard_is_final(page) is False
+
+
+def test_two_round_page_with_earnings_placeholder_is_unknown():
+    """An earnings column made only of '-' placeholders proves nothing."""
+    page = NAV_TABLE + (
+        "<table><thead><tr><th></th><th>pos</th><th>earnings</th>"
+        "<th>r1</th><th>r2</th><th>r3</th><th>r4</th><th>total</th></tr></thead><tbody>"
+        '<tr class="TableBase-bodyTr GolfLeaderboard-bodyTr"><td></td><td>1</td>'
+        '<td><span class="CellPlayerName--long"><a>A. Player</a></span></td>'
+        "<td>-</td><td>70</td><td>71</td><td>-</td><td>-</td><td>141</td></tr></tbody></table>"
+    )
+
+    result = analyze_leaderboard_finality(page)
+
+    assert result["state"] == FINALITY_UNKNOWN
+    assert result["reason"] == "earnings_column_placeholder_only"
+    assert leaderboard_is_final(page) is False
+
+
+def test_page_without_a_player_leaderboard_table_is_unknown():
+    page = NAV_TABLE + "<table><tbody><tr><td>course map</td></tr></tbody></table>"
+
+    result = analyze_leaderboard_finality(page)
+
+    assert result["state"] == FINALITY_UNKNOWN
+    assert result["reason"] == "player_leaderboard_table_not_found"
+
+
+def test_empty_page_is_unknown_not_final():
+    assert analyze_leaderboard_finality("")["state"] == FINALITY_UNKNOWN
+
+
+def test_all_players_after_round_one_alone_is_not_final_evidence():
+    """Round-1 strokes with no earnings/status evidence must not grade."""
+    page = (
+        "<table><thead><tr><th></th><th>pos</th><th>r1</th><th>r2</th></tr></thead><tbody>"
+        '<tr class="TableBase-bodyTr GolfLeaderboard-bodyTr"><td></td><td>1</td>'
+        '<td><span class="CellPlayerName--long"><a>A. Player</a></span></td>'
+        "<td>65</td><td>-</td></tr></tbody></table>"
+    )
+
+    assert analyze_leaderboard_finality(page)["state"] == FINALITY_UNKNOWN

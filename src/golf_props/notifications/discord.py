@@ -15,9 +15,24 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from golf_props.backtest.forecast_archive import verify_forecast_archive
+from golf_props.config import PROJECT_ROOT
 
 PROHIBITED_WORDS = ("lock", "play", "wager", "bet", "edge")
 BOARD_SCHEMA_VERSION = 1
+FOOTER_TEXT = "forecast only | private paper research | model probabilities are not book prices"
+DESCRIPTION_LIMIT = 4096
+FIELD_VALUE_LIMIT = 1024
+MAX_DESCRIPTION_ROWS = 15
+DEFAULT_ODDS_LATEST_CSV = (
+    PROJECT_ROOT / "data" / "processed" / "odds_snapshots" / "bovada_golf_latest.csv"
+)
+DEFAULT_ODDS_ARCHIVE_DIR = PROJECT_ROOT / "data" / "raw" / "odds_snapshots" / "archive"
+DEFAULT_WEEKLY_DIR = PROJECT_ROOT / "data" / "interim" / "weekly"
+DEFAULT_EVENT_ALIASES = PROJECT_ROOT / "config" / "odds_event_aliases.csv"
+DEFAULT_PLAYER_ALIASES = PROJECT_ROOT / "config" / "player_aliases.csv"
+DEFAULT_PLAYERS_TABLE = (
+    PROJECT_ROOT / "data" / "processed" / "pga_2001_2026_20261104" / "players.csv"
+)
 
 
 class DiscordBoardError(ValueError):
@@ -54,7 +69,19 @@ def _percent(value: str) -> str:
     return f"{float(value):.1%}"
 
 
-def build_board(archive_dir: Path, created_at: Optional[datetime] = None) -> dict[str, Any]:
+def build_board(
+    archive_dir: Path,
+    created_at: Optional[datetime] = None,
+    *,
+    odds_snapshot: Optional[Path] = None,
+    odds_archive_dir: Optional[Path] = None,
+    odds_latest_csv: Optional[Path] = None,
+    weekly_dir: Optional[Path] = None,
+    event_aliases_path: Optional[Path] = None,
+    player_aliases_path: Optional[Path] = None,
+    players_table: Optional[Path] = None,
+    annotate_prices: bool = True,
+) -> dict[str, Any]:
     verification = verify_forecast_archive(archive_dir)
     if not verification["verified"]:
         raise DiscordBoardError(
@@ -85,6 +112,7 @@ def build_board(archive_dir: Path, created_at: Optional[datetime] = None) -> dic
         "event_structure": structure,
         "frozen_parameters": frozen,
         "field_quality": run_manifest.get("field_quality", {}),
+        "history_freshness": run_manifest.get("history_freshness"),
         "rows": [
             {
                 "rank": index,
@@ -98,15 +126,100 @@ def build_board(archive_dir: Path, created_at: Optional[datetime] = None) -> dic
             for index, row in enumerate(rows, 1)
         ],
     }
+    board["odds"] = _annotate_odds(board, annotate_prices=annotate_prices,
+                                   odds_snapshot=odds_snapshot,
+                                   odds_archive_dir=odds_archive_dir,
+                                   odds_latest_csv=odds_latest_csv,
+                                   weekly_dir=weekly_dir,
+                                   event_aliases_path=event_aliases_path,
+                                   player_aliases_path=player_aliases_path,
+                                   players_table=players_table)
     return board
+
+
+def _annotate_odds(board: dict[str, Any], *, annotate_prices: bool, **kwargs: Any) -> dict[str, Any]:
+    if not annotate_prices:
+        return {
+            "schema_version": 1,
+            "status": "unpriced",
+            "reason": "annotation_disabled",
+            "statement": "Prices not annotated for this board.",
+            "market_label": "Winner",
+            "placement_market_prices": "unavailable",
+            "priced_players": 0,
+            "unpriced_players": int(board.get("field_size") or len(board["rows"])),
+            "unpriced_reasons": {},
+        }
+    from golf_props.odds.board_prices import annotate_board_rows
+
+    archive_dir = kwargs.pop("odds_archive_dir", None)
+    latest_csv = kwargs.pop("odds_latest_csv", None)
+    weekly_dir = kwargs.pop("weekly_dir", None)
+    event_aliases = kwargs.pop("event_aliases_path", None)
+    player_aliases = kwargs.pop("player_aliases_path", None)
+    players_table = kwargs.pop("players_table", None)
+    annotated, odds = annotate_board_rows(
+        event_name=str(board.get("event_name") or ""),
+        event_key=_event_key_from_archive(board.get("archive_dir", "")),
+        event_date=str(board.get("event_date") or ""),
+        rows=board["rows"],
+        odds_snapshot=kwargs.pop("odds_snapshot", None),
+        odds_archive_dir=archive_dir if archive_dir is not None else DEFAULT_ODDS_ARCHIVE_DIR,
+        odds_latest_csv=latest_csv if latest_csv is not None else DEFAULT_ODDS_LATEST_CSV,
+        weekly_dir=weekly_dir if weekly_dir is not None else DEFAULT_WEEKLY_DIR,
+        event_aliases_path=(
+            event_aliases if event_aliases is not None else DEFAULT_EVENT_ALIASES
+        ),
+        player_aliases_path=(
+            player_aliases if player_aliases is not None else DEFAULT_PLAYER_ALIASES
+        ),
+        players_table=(
+            players_table if players_table is not None else DEFAULT_PLAYERS_TABLE
+        ),
+    )
+    board["rows"] = annotated
+    return odds
+
+
+def _event_key_from_archive(archive_dir: object) -> str:
+    if not archive_dir:
+        return ""
+    return Path(str(archive_dir)).name
+
+
+def _odds_label(price: Optional[dict[str, Any]]) -> str:
+    if not price:
+        return "not priced"
+    american = int(price.get("price_american") or 0)
+    decimal = float(price.get("price_decimal") or 0.0)
+    sign = "+" if american > 0 else ""
+    return f"{sign}{american} ({decimal:.2f})"
+
+
+def _american_label(price: Optional[dict[str, Any]]) -> str:
+    if not price:
+        return "not priced"
+    american = int(price.get("price_american") or 0)
+    return f"{'+' if american > 0 else ''}{american}"
+
+
+def _placement_odds_label(prices: Optional[dict[str, Any]]) -> str:
+    prices = prices or {}
+    parts = []
+    for market, label in (("top5", "T5"), ("top10", "T10"), ("top20", "T20")):
+        if prices.get(market):
+            parts.append(f"{label} {_american_label(prices[market])}")
+    return " / ".join(parts) if parts else "not priced"
 
 
 def render_markdown(board: dict[str, Any]) -> str:
     structure = board["event_structure"]
     frozen = board["frozen_parameters"]
     quality = board["field_quality"]
+    freshness = board.get("history_freshness") or {}
     timing_source = board.get("timing_source", "unknown")
     timing_label = "exact tee times" if timing_source == "exact_tee_times" else "official event date"
+    odds = board.get("odds") or {}
     lines = [
         f"# {board['event_name']} Forecast Board",
         "",
@@ -121,47 +234,179 @@ def render_markdown(board: dict[str, Any]) -> str:
         f"- Historical data through: `{frozen.get('source_data_through', 'unknown')}`",
         f"- Field quality: `{quality.get('quality_status', 'unknown')}`",
         "",
-        "| # | Player | Winner | Top 5 | Top 10 | Top 20 | Make cut |",
-        "|---:|---|---:|---:|---:|---:|---:|",
+        "| # | Player | Winner (model) | Winner odds (book) | Placement odds (book) | Top 5 | Top 10 | Top 20 | Make cut |",
+        "|---:|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in board["rows"]:
         lines.append(
             f"| {row['rank']} | {row['player_name']} | {_percent(str(row['winner_prob']))} | "
+            f"{_odds_label(row.get('price'))} | "
+            f"{_placement_odds_label(row.get('prices'))} | "
             f"{_percent(str(row['top5_prob']))} | {_percent(str(row['top10_prob']))} | "
             f"{_percent(str(row['top20_prob']))} | {_percent(str(row['make_cut_prob']))} |"
         )
+    lines.extend(_odds_markdown_lines(board, odds))
     return "\n".join(lines) + "\n"
 
 
-def discord_payload(board: dict[str, Any]) -> dict[str, Any]:
-    rows = board["rows"][:15]
-    description = "\n".join(
-        f"`{row['rank']:>2}` {row['player_name']}: winner {_percent(str(row['winner_prob']))} | "
-        f"T5 {_percent(str(row['top5_prob']))} | T10 {_percent(str(row['top10_prob']))} | "
-        f"T20 {_percent(str(row['top20_prob']))}"
-        for row in rows
+def _odds_pre_start_label(odds: dict[str, Any]) -> str:
+    value = odds.get("pre_start")
+    if value is True:
+        return "true (captured before the competitive start)"
+    if value is False:
+        return "false (captured after the competitive start)"
+    return "unknown (capture timing not provable)"
+
+
+def _odds_markdown_lines(board: dict[str, Any], odds: dict[str, Any]) -> list[str]:
+    from golf_props.odds.board_prices import ROI_STATEMENT
+
+    lines = ["", "## Prices", ""]
+    if odds.get("status") != "priced":
+        lines.append(f"- None attached: {odds.get('statement', 'no attributable quote')}")
+    else:
+        source = odds.get("source") or {}
+        coverage = odds.get("market_coverage") or {}
+        lines.extend(
+            [
+                f"- Sportsbook: `{odds.get('sportsbook', 'Bovada')}` (one preserved capture)",
+                f"- Captured (UTC): `{odds.get('capture_utc') or 'not recorded'}`",
+                f"- Pre-start: `{_odds_pre_start_label(odds)}`",
+                f"- Winner coverage: `{odds.get('priced_players')}` priced of "
+                f"`{len(board['rows'])}` forecasts; unpriced forecasts stay visible",
+            ]
+        )
+        for market, label in (
+            ("top5", "Top 5"),
+            ("top10", "Top 10"),
+            ("top20", "Top 20"),
+            ("make_cut", "Make cut"),
+        ):
+            item = coverage.get(market) or {}
+            if item:
+                lines.append(
+                    f"- {label} coverage: `{item.get('priced_players', 0)}` priced of "
+                    f"`{len(board['rows'])}` forecasts"
+                )
+        lines.extend(
+            [
+                f"- Source fingerprint: `{source.get('sha256', '')}` "
+                f"({source.get('kind', '')} `{source.get('path', '')}`)",
+                f"- Model probabilities above are model estimates; odds are real "
+                f"{odds.get('sportsbook', 'Bovada')} quotes and are not model output.",
+                f"- {odds.get('placement_statement', '')}",
+                f"- Settlement/ties: {_settlement_label(odds)}",
+            ]
+        )
+    lines.extend([f"- {ROI_STATEMENT}", "", FOOTER_TEXT, ""])
+    return lines
+
+
+def _settlement_label(odds: dict[str, Any]) -> str:
+    semantics = odds.get("settlement_semantics") or {}
+    if not semantics:
+        return "not recorded"
+    return (
+        f"grading counts ties as finishes at or inside the place cutoff "
+        f"(`{semantics.get('grading_target', 'unknown')}`); book settlement is "
+        f"`{semantics.get('book_settlement', 'unknown')}` and dead-heat handling "
+        "is not modelled; no priced return is computed"
     )
+
+
+def _price_field_value(board: dict[str, Any], odds: dict[str, Any]) -> str:
+    if odds.get("status") != "priced":
+        return _truncate(
+            f"none attached | {odds.get('statement', 'no attributable quote')}", FIELD_VALUE_LIMIT
+        )
+    source = odds.get("source") or {}
+    coverage = odds.get("market_coverage") or {}
+    coverage_bits = [
+        f"{label} {coverage.get(market, {}).get('priced_players', 0)}"
+        for market, label in (
+            ("winner", "winner"),
+            ("top5", "T5"),
+            ("top10", "T10"),
+            ("top20", "T20"),
+        )
+    ]
+    return _truncate(
+        "\n".join(
+            [
+                f"book {odds.get('sportsbook', 'Bovada')} | one preserved capture",
+                f"captured {odds.get('capture_utc') or 'not recorded'} | pre-start: {_odds_pre_start_label(odds)}",
+                "priced " + ", ".join(coverage_bits) + f" of {len(board['rows'])} forecasts",
+                f"source sha256 {source.get('sha256', '')}",
+                "model probabilities are not book prices",
+                odds.get("placement_statement", ""),
+                "no priced selection, settlement contract or ROI is defined",
+            ]
+        ),
+        FIELD_VALUE_LIMIT,
+    )
+
+
+def _truncate(value: str, limit: int) -> str:
+    text = str(value)
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1] + "\u2026"
+
+
+def discord_payload(board: dict[str, Any]) -> dict[str, Any]:
+    odds = board.get("odds") or {}
+    description_lines: list[str] = []
+    for row in board["rows"][:MAX_DESCRIPTION_ROWS]:
+        line = (
+            f"`{row['rank']:>2}` {row['player_name']}: winner {_percent(str(row['winner_prob']))} | "
+            f"T5 {_percent(str(row['top5_prob']))} | T10 {_percent(str(row['top10_prob']))} | "
+            f"T20 {_percent(str(row['top20_prob']))}"
+        )
+        if row.get("price"):
+            line += f" | odds {_odds_label(row['price'])}"
+        if row.get("prices"):
+            placement = _placement_odds_label(row["prices"])
+            if placement != "not priced":
+                line += f" | {placement}"
+        candidate = "\n".join(description_lines + [line])
+        if len(candidate) > DESCRIPTION_LIMIT - 2:
+            break
+        description_lines.append(line)
+    description = "\n".join(description_lines)
     structure = board["event_structure"]
     frozen = board["frozen_parameters"]
     quality = board["field_quality"]
+    freshness = board.get("history_freshness") or {}
     timing_source = board.get("timing_source", "unknown")
     timing_label = "exact tee times" if timing_source == "exact_tee_times" else "official event date"
     payload = {
         "allowed_mentions": {"parse": []},
         "embeds": [{
-            "title": f"{board['event_name']} | Forecast Board",
+            "title": f"{board['event_name']} | Forecast Board"[:256],
             "description": description,
             "color": 0x3498DB,
             "fields": [
-                {"name": "Event", "value": f"{board['event_date']} | {board['field_size']} players", "inline": True},
-                {"name": "Competition start", "value": str(board["event_start_at_utc"] or "not recorded"), "inline": True},
+                {"name": "Event", "value": f"{board['event_date']} | {board['field_size']} players"[:FIELD_VALUE_LIMIT], "inline": True},
+                {"name": "Competition start", "value": str(board["event_start_at_utc"] or "not recorded")[:FIELD_VALUE_LIMIT], "inline": True},
                 {"name": "Timing source", "value": timing_label, "inline": True},
                 {"name": "Structure", "value": f"{structure.get('format', 'unknown')} / {structure.get('cut_rule', 'unknown')}", "inline": False},
                 {"name": "Model", "value": f"365d / {frozen.get('prior_rounds')} / {frozen.get('variance_prior_rounds')} rounds", "inline": True},
                 {"name": "Data through", "value": str(frozen.get('source_data_through', 'unknown')), "inline": True},
                 {"name": "Data quality", "value": str(quality.get("quality_status", "unknown")), "inline": True},
+                *(
+                    [
+                        {
+                            "name": "History status",
+                            "value": _history_freshness_label(freshness),
+                            "inline": False,
+                        }
+                    ]
+                    if freshness
+                    else []
+                ),
+                {"name": "Prices", "value": _price_field_value(board, odds), "inline": False},
             ],
-            "footer": {"text": "forecast only | private paper research | prices omitted"},
+            "footer": {"text": FOOTER_TEXT},
         }],
     }
     text = json.dumps(payload).casefold()
@@ -169,6 +414,17 @@ def discord_payload(board: dict[str, Any]) -> dict[str, Any]:
         if re.search(rf"\b{re.escape(word)}\b", text):
             raise DiscordBoardError(f"payload contains prohibited wording: {word}")
     return payload
+
+
+def _history_freshness_label(freshness: dict[str, Any]) -> str:
+    status = str(freshness.get("status") or "unknown")
+    missing = len(freshness.get("missing_events") or [])
+    active_through = str(freshness.get("source_data_through") or "unknown")
+    if status == "fresh":
+        return f"fresh | active through {active_through}"
+    if status == "stale":
+        return f"STALE | {missing} completed event(s) missing | active through {active_through}"
+    return f"unknown | {freshness.get('reason', 'no assessment')}"[:FIELD_VALUE_LIMIT]
 
 
 def _atomic_write(path: Path, content: str) -> None:
@@ -184,8 +440,25 @@ def publish_board(
     dry_run: bool = False,
     resend: bool = False,
     webhook_url: Optional[str] = None,
+    *,
+    odds_snapshot: Optional[Path] = None,
+    odds_archive_dir: Optional[Path] = None,
+    odds_latest_csv: Optional[Path] = None,
+    weekly_dir: Optional[Path] = None,
+    event_aliases_path: Optional[Path] = None,
+    player_aliases_path: Optional[Path] = None,
+    players_table: Optional[Path] = None,
 ) -> dict[str, Any]:
-    board = build_board(archive_dir)
+    board = build_board(
+        archive_dir,
+        odds_snapshot=odds_snapshot,
+        odds_archive_dir=odds_archive_dir,
+        odds_latest_csv=odds_latest_csv,
+        weekly_dir=weekly_dir,
+        event_aliases_path=event_aliases_path,
+        player_aliases_path=player_aliases_path,
+        players_table=players_table,
+    )
     board_json = output_dir / "forecast_board.json"
     payload_json = output_dir / "discord_payload.json"
     receipt_path = output_dir / "delivery_receipt.json"
@@ -196,6 +469,7 @@ def publish_board(
     _atomic_write(board_json, json.dumps(board, indent=2, sort_keys=True) + "\n")
     payload = discord_payload(board)
     _atomic_write(payload_json, json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    odds = board.get("odds") or {}
     receipt: dict[str, Any] = {
         "schema_version": BOARD_SCHEMA_VERSION,
         "board_id": board["board_id"],
@@ -204,6 +478,24 @@ def publish_board(
         "status": "dry_run" if dry_run else "pending",
         "payload_sha256": _sha256(payload_json),
         "messages": 0,
+        # What was displayed, as displayed: an audit fingerprint for the quote
+        # source, its capture time and the event identity it was joined through.
+        "odds": {
+            "status": odds.get("status"),
+            "reason": odds.get("reason"),
+            "sportsbook": odds.get("sportsbook"),
+            "market": odds.get("market"),
+            "capture_utc": odds.get("capture_utc"),
+            "pre_start": odds.get("pre_start"),
+            "event_match": (odds.get("event_identity") or {}).get("match"),
+            "provider_event_name": (odds.get("event_identity") or {}).get(
+                "provider_event_name"
+            ),
+            "source_sha256": (odds.get("source") or {}).get("sha256"),
+            "priced_players": odds.get("priced_players"),
+            "unpriced_players": odds.get("unpriced_players"),
+            "placement_market_prices": odds.get("placement_market_prices"),
+        },
     }
     if dry_run:
         print(json.dumps(payload, indent=2, sort_keys=True))

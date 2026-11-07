@@ -1,0 +1,64 @@
+{
+  "archive_verification": {
+    "archive_dir": "/home/azureuser/golf_props/data/interim/reports/prospective_forecasts/butterfield_bermuda_championship_2026",
+    "problems": [],
+    "schema_version": 1,
+    "verified": true
+  },
+  "artifact_sha256": {
+    "graded_predictions": "d8118b8fc26179ce59f404b9fc784355fe6d0f281ded4a10bce506bab6da7f81",
+    "metrics": "882dbeb57d8e7e7c61510bd8a0c3e865b8cc9584e3c8188359fd52a6130b8a57",
+    "report": "021ea6dbd0c67fb74df90fcdb45a971c013c82282b5537968ccd243fdf1ed79e"
+  },
+  "created_at_utc": "2026-10-26T14:17:00.945964+00:00",
+  "event_name": "Butterfield Bermuda Championship",
+  "excluded_players": [
+    "Max Greyserman"
+  ],
+  "excluded_targets": [
+    "make_cut"
+  ],
+  "forecast_classification": "prospective_forecast",
+  "forecast_players": 120,
+  "forecast_players_without_results": [
+    "Lanto Griffin",
+    "Rasmus H\u00f8jgaard"
+  ],
+  "frozen_parameters_changed": false,
+  "graded_players_per_target": 117,
+  "graded_targets": [
+    "top20",
+    "top10",
+    "top5",
+    "winner"
+  ],
+  "input_sha256": {
+    "archive_manifest": "9bd07191bae335de552791a259bd04f9f547ed81ae95d3a6a0810f3d7964729c",
+    "predictions": "ec4eabb8695925a95348870503653832514e60daf6bceead6055d6073b28ee3e",
+    "results_page": "e216d82a38ec0d77e14b374d79688f7cafe019af552840582134671b79211bfe",
+    "rolling_metrics": "1140b6aa7912266a64155fa560cf2bd6a6a80c76637af686c833f894a2ab6161"
+  },
+  "intersection_players": 118,
+  "name_aliases_applied": [
+    "Ben James (a) <-> Benjamin James",
+    "Kihei Akina (a) <-> Kihei Akina",
+    "Lauritzen, Nixon <-> Nixon Lauritzen",
+    "Lemieux, Austin <-> Austin Lemieux",
+    "Leng, Jay <-> Jay Leng",
+    "Mason Howell (a) <-> Mason Howell",
+    "Miles Russell (a) <-> Miles Russell",
+    "Paz, Virgilio <-> Virgilio Paz",
+    "Sautron, Rudy <-> Rudy Sautron",
+    "S\u00e9amus Power <-> Seamus Power",
+    "Ventura, Kristoffer <-> Kris Ventura"
+  ],
+  "results_source": {
+    "organization": "CBS Sports",
+    "url": "https://www.cbssports.com/golf/leaderboard/pga-tour/31000146/butterfield-bermuda-championship/"
+  },
+  "schema_version": 1,
+  "ungraded_results_players": [
+    "Greyson Sigg",
+    "Taylor Montgomery"
+  ]
+}

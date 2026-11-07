@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "source": "Bovada",
+  "source_api_url": "https://www.bovada.lv/services/sports/event/coupon/events/A/description/golf/pga-tour",
+  "captured_at_utc": "2026-10-30T18:00:00Z",
+  "event_names": ["Mexico Open"],
+  "market_counts": {"winner": 1},
+  "row_count": 1,
+  "pre_start": false,
+  "pre_start_basis": "captured_after_date_only_competitive_start",
+  "competitive_start": {
+    "Mexico Open": {
+      "state": "date_only",
+      "start_at_utc": null,
+      "competitive_start_date": "2026-10-29",
+      "event_key": "vidantaworld_mexico_open_2026",
+      "source": "event_control.competitive_start_date"
+    }
+  },
+  "prices_are_public": false,
+  "selection_policy": "undefined",
+  "rows": [
+    {
+      "odds_id": "odds_fixture_poststart",
+      "event_id": "",
+      "event_name": "Mexico Open",
+      "season": "2026",
+      "player_id": "",
+      "player_name": "Player A",
+      "sportsbook": "Bovada",
+      "market_type": "winner",
+      "market_name": "Winner",
+      "selection_name": "Player A",
+      "line": "",
+      "price_american": 900,
+      "price_decimal": 10.0,
+      "implied_probability": 0.1,
+      "captured_at_utc": "2026-10-30T18:00:00Z",
+      "source_url": "https://www.bovada.lv/golf/pga-tour/mexico-open/mexico-open-202610290930",
+      "market_status": "open",
+      "is_closing_candidate": false,
+      "provider_event_id": "prov-ev-1",
+      "provider_market_id": "prov-mk-1",
+      "provider_outcome_id": "prov-oc-a",
+      "provider_price_id": "prov-pr-post",
+      "lookup_status": "provider_ids_present; canonical_event_and_player_unmapped"
+    }
+  ]
+}
