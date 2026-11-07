@@ -1,6 +1,6 @@
 # Research Narrative: How We Got Here
 
-Last updated: 2026-09-16
+Last updated: 2026-11-05
 
 This document is the human-readable story of the project: what we were trying
 to learn, what worked, what failed, what the current theory is, and what a new
@@ -214,6 +214,39 @@ structure row. Alerting was also simplified: urgent, actionable failures post to
 the main channel with a `[URGENT]` prefix, and routine processing is silent, so no
 weekly check-in is needed. Net: ordinary and playoff weekly events are now fully
 hands-off.
+
+### Phase M — Price identity, stale-history detection, and a refresh candidate
+
+The 2026 WWT board exposed two separate problems that looked like one. The
+board said no prices, but a preserved Bovada capture existed: the provider
+called the event `WWT Championship` while the forecast called it `World Wide
+Technology Championship`. The durable fix is shared event-name equivalence
+with strict corroboration for abbreviations (correct date plus >=80% field
+overlap), not fuzzy matching. Reviewed aliases still cover sponsor changes.
+
+A second problem was real: active performance history still ended 2026-07-11.
+A freshness check now compares the completed authoritative schedule with the
+active canonical events and reports every missing event, including whether the
+immediately preceding event is missing. It is surfaced in health, status, the
+forecast manifest, and future boards. The check correctly reports 13 missing
+eligible events.
+
+A versioned candidate refresh was built from 12 preserved final result pages,
+introducing no new duplicate ids or out-of-range rounds. The Open Championship
+is held out because its preserved CBS page does not pass the strict finality
+gate; Presidents Cup is correctly excluded as team match play. On the WWT field
+the refreshed inputs leave the incumbent reproduction exact, raise mean
+effective rounds from 63.45 to 80.40, and change the top-20 set by 7 of 20.
+That is a retrospective diagnostic on already-inspected data, not prospective
+evidence and not a retuning result. The candidate was activated on both hosts
+on 2026-11-05 with 365/8/20 unchanged and `source_data_through=2026-10-31`;
+Austin is the first eligible forecast on the refreshed inputs. The Open remains
+the one honestly missing event because its preserved page fails the strict
+finality gate.
+
+Price addenda are separate artifacts linked to the immutable forecast archive
+and deduplicated by archive/source hash. They never rewrite the board and never
+change model probabilities, selections, or ROI.
 
 ## Current Theory
 

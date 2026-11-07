@@ -921,16 +921,17 @@ terms.
 
 | File | Status | Read by `src/` |
 | --- | --- | --- |
-| `data/frozen_model_manifest.json` | **legacy** — tracked, byte-identical copy (same SHA-256 `8ee96b9f…`) of the live manifest, kept as a clone-reachable reference | no |
+| `data/frozen_model_manifest.json` | **legacy** — tracked copy of the pre-2026-11-05 live manifest (SHA-256 `8ee96b9f…`), kept as a clone-reachable parameter reference; it is no longer byte-identical to the activated live manifest | no |
 | `data/interim/reports/rolling_recompute_20261007/frozen_model_manifest.json` | **derived** — output of the 2026-10-07 recompute (SHA-256 `2614f042…`); parameters identical to the live manifest, differing only in `created_at_utc` and `prospective_holdout_after` | no |
 
 Each carries an adjacent note stating what it is, why it exists, and that
 nothing reads it as truth: `data/frozen_model_manifest.LEGACY.md` and
 `data/interim/reports/rolling_recompute_20261007/frozen_model_manifest.DERIVED.md`.
 
-Nothing was deleted. The tracked copy is a provable byte-for-byte duplicate of
-the live manifest, but the approved resolution was labelling, not deletion, so
-it stays in the tree and in git.
+Nothing was deleted. The tracked copy was a provable byte-for-byte duplicate of
+the pre-refresh live manifest; after the 2026-11-05 input refresh it remains as
+a labelled historical reference. The approved resolution was labelling, not
+deletion, so it stays in the tree and in git.
 
 ### 6.3 Regression guard
 
@@ -948,3 +949,26 @@ This section pins *which* file is truth. It does not make truth reproducible
 from a clone: the live manifest and four other `WeeklyPaths` inputs are still
 untracked (§3.6), and the parameters were already proven equal, so no forecast
 output changed.
+
+### 6.5 2026-11-05 input-refresh activation
+
+The live manifest was refrozen on 2026-11-05 for an **input-data** refresh; the
+model parameters did not change. The activated manifest SHA-256 is
+`bb414ca1856d7fefaa877d3cbd6a2c19a28ee967331c89abf2e28391c828e35a`:
+
+- `canonical_dir`: `data/processed/pga_2001_2026_20261104`
+- `round_performance_path`:
+  `data/interim/features/pga_2001_2026_20261104_round_performance.csv`
+- `source_data_through`: `2026-10-31`
+- `prospective_holdout_after`: `2026-11-05`
+- frozen model: **365-day half-life / 8-round prior / 20 variance-prior
+  rounds / cut size 65** (unchanged)
+- parent manifest SHA-256: `8ee96b9f…`, preserved as
+  `frozen_model_manifest_pre_20261104.json` on both hosts.
+
+`WeeklyPaths` now names the versioned canonical and round-performance inputs and
+still names the one live manifest path. All three manifest input hashes verify.
+Freshness reports only The Open Championship missing because its preserved CBS
+page fails the strict finality gate. This section supersedes §6.1 only for the
+live input hashes, `source_data_through`, and `prospective_holdout_after`; the
+single-source-of-truth path and the unchanged parameters still hold.

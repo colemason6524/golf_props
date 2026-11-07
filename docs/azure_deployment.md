@@ -108,6 +108,47 @@ immutable archive, and publishes the forecast-only board. Operator review is
 needed only if the loop emits an urgent alert about a genuinely ambiguous identity
 or a hard failure.
 
+## History freshness and price addenda
+
+Check whether the active performance history is missing completed events:
+
+```bash
+cd ~/golf_props
+.venv/bin/python -m golf_props.cli history-freshness \
+  --canonical-dir data/processed/pga_2001_2026 \
+  --schedule data/raw/current_events/_schedule/latest/schedule.html \
+  --as-of-date "$(date -u +%F)" \
+  --frozen-manifest data/interim/reports/rolling_round_simulation_validation/frozen_model_manifest.json
+```
+
+Build a versioned candidate refresh from a reviewed inventory (never writes the
+active inputs):
+
+```bash
+.venv/bin/python -m golf_props.cli refresh-history \
+  --inventory data/interim/reports/history_refresh/<version>/inventory.json \
+  --base-canonical data/processed/pga_2001_2026 \
+  --base-round-performance data/interim/features/pga_2001_2026_round_performance.csv \
+  --output-root data/processed/history_refresh/<version> \
+  --version <version> --source-cutoff 2026-07-11 --as-of-date "$(date -u +%F)" \
+  --course-aliases config/course_aliases.csv \
+  --parent-manifest data/interim/reports/rolling_round_simulation_validation/frozen_model_manifest.json
+```
+
+Activation is a separate reviewed step: copy the candidate to the VM, write a
+new frozen input manifest with the new hashes (365/8/20 unchanged), and point
+`WeeklyPaths` at it. Keep the prior inputs as rollback.
+
+If markets appear after a board was published, record a separate addendum
+(dry-run by default; `--send` only after review):
+
+```bash
+.venv/bin/python -m golf_props.cli price-addendum \
+  --archive-dir data/interim/reports/prospective_forecasts/<event_key> \
+  --delivery-root data/interim/reports/forecast_delivery \
+  --odds-snapshot data/raw/odds_snapshots/archive/<capture>.json
+```
+
 ## Private Forecast Board
 
 After a verified prospective archive exists, the weekly forecast pipeline

@@ -1,66 +1,78 @@
+> History. Current state is this sport’s VM `.dashboard/checkpoint.json`. This file is not the live schedule.
+
 # NEXT CHECKIN — golf_props
 
-Updated 2026-10-01. Read after `docs/project_handoff.md`.
+Updated 2026-11-05. Read after `docs/project_handoff.md`.
 
 ## 1) Status
 
-- The Mac is the durable workspace and bulk-data location.
-- Azure `/home/azureuser/golf_props` runs the scheduler via user systemd
-  timers: `sports-golf-forecast.timer` every two hours at minute 17
-  America/Detroit; `sports-golf-bovada.timer` Mon/Wed/Thu 08:56.
-- Repository: `main` == `origin/main`; the 2026-09-18 dirty tree plus the
-  2026-10-01 fixes are committed and pushed. Azure was synced to origin.
-
-### 2026-09-30/10-01 Bank of Utah rescue
-
-- Found on return from hiatus: the Bank of Utah field sat in `forecast_ready`
-  for days with no archive (tee-time fallback deadlock) and ALL 115 players
-  unmatched ("Last, First" source names). The flawed midnight-Oct-1 guard was
-  ~35 minutes from marking the event `deadline_missed`.
-- Fixes deployed pre-start; the forecast archived at 2026-10-01T03:26Z,
-  archive-verified, and the Discord board was published (`status: sent`).
-- Identity after fix: 113 matched, 2 unmatched admitted
-  (Boston Bracken, Kristoffer Ventura).
-- Archive:
-  `data/interim/reports/prospective_forecasts/bank_of_utah_championship_2026/`.
+- Azure `/home/azureuser/golf_props` is the active scheduler; both
+  `sports-golf-forecast.timer` and `sports-golf-bovada.timer` are active.
+- The 2026 WWT forecast archive verifies and its board was sent. Both preserved
+  Bovada captures now price the board through the corroborated
+  `WWT Championship -> World Wide Technology Championship` initialism join.
+- The reviewed identity/price/freshness/refresh code delta is deployed. Live
+  and staged suites: **398 passed** on both Mac and Azure Python 3.10.
+- Active performance inputs were refreshed and activated on both hosts on
+  2026-11-05: canonical `data/processed/pga_2001_2026_20261104/`, round
+  performance `..._20261104_round_performance.csv`, live manifest SHA-256
+  `bb414ca1…`. Frozen parameters remain 365/8/20; `source_data_through` is
+  `2026-10-31`; `prospective_holdout_after` is `2026-11-05`.
+- Freshness now reports `stale` with exactly one missing event, The Open
+  Championship; `missing_immediately_preceding=false`. The Open is blocked on
+  authoritative finality evidence. Presidents Cup is excluded as team match
+  play.
+- The scheduler is at `austin_championship_2026` / `awaiting_field`; official
+  start 2026-11-12. A dry-run weekly pass exited 0 and wrote the new freshness
+  state.
 
 ## 2) Next action (with WHEN)
 
-1. On/after 2026-10-04: preserve the CBS final leaderboard under
-   `data/raw/prospective_results/bank_of_utah_championship_2026/` and run
-   `grade-forecast`. Do NOT retune 365/8/20 based on this single grade.
-2. Pull the Azure archive back to the Mac (copy, non-destructive) so both
-   hosts hold the record.
-3. The loop auto-advances to the next eligible event afterward.
+Activation is complete. Do not repeat it.
+
+1. Let the scheduled loop advance Austin when its official field appears.
+2. Before/at the Austin forecast, verify `weekly-forecast-status` and
+   `health.json` show the activated cutoff `2026-10-31` and Austin remains
+   `awaiting_field`/`forecast_ready` as expected.
+3. At publication, confirm the board shows the refreshed history status
+   (only The Open missing) and real price coverage/readiness.
+4. After Austin completes, grade and recap normally; do not retune from one event.
+
+The Open remains missing until an authoritative final result page passes
+`analyze_leaderboard_finality`; do not bypass the strict gate.
 
 ## 3) What to check on pop-back
 
-- `weekly-forecast-status` on either host: after grading, the loop should be
-  waiting/advancing; exit 0 quiet.
-- Azure: `systemctl --user list-timers --all | grep sports-golf` and the newest
-  `logs/weekly_forecast.log` entries.
-- Copy-back integrity: `predictions.csv` SHA-256 must match between hosts.
+- `weekly-forecast-status`: Austin state, field readiness, and
+  `history_freshness`.
+- `data/interim/weekly/health.json`: `history_freshness.status`,
+  `missing_events`, `candidate_refresh`.
+- Austin archive/board: `data through` must equal `2026-10-31`; the board must
+  include a History status field (only The Open missing).
+- Prices: board `odds.readiness`; if unpriced, inspect
+  `event_identity_diagnostics` and `observed_provider_events` before assuming a
+  collection failure.
+- If markets appear after publication, use `price-addendum` dry-run first.
 
 ## 4) What NOT to do
 
-- No retune from the Bank of Utah grade — two graded events is still thin
-  evidence; frozen 365/8/20 incumbent stays.
-- `make_cut` IS gradable for this event (ordinary top-65 cut), unlike the
-  no-cut playoff events.
-- Do not `git clean` generated research data.
-- No model/odds changes based on one more event; books remain a comparison
-  layer only, post-freeze.
+- Do not rewrite the WWT archive or reuse it as refreshed-input evidence.
+- Do not delete or overwrite `data/processed/pga_2001_2026` or the July-11
+  round-performance file; they are the rollback. The pre-activation manifest is
+  `frozen_model_manifest_pre_20261104.json`.
+- Do not retune 365/8/20 from the refreshed-input diagnostic or one event.
+- Do not bypass the finality gate for The Open.
+- Do not `git clean` ignored research data.
 
 ## 5) Leave-off pointer
 
-- `docs/project_handoff.md` — "Exact Stopping Point" (2026-10-01 session block).
-- Grade artifacts live under
-  `data/interim/reports/forecast_grading/bank_of_utah_championship_2026/`.
-
-## 6) Small later ideas (pick at most one)
-
-- Investigate why the collector's tee-time parser returned nothing this week
-  (official site has tee times); exact tee times would restore T-12 scheduling.
-- Add durable timestamped Bovada history without changing the frozen
-  performance inputs.
-- Add archive freshness and next-wait-reason telemetry to status output.
+- `docs/project_handoff.md` — “2026-11-04/05 session” under Exact Stopping Point.
+- Activated inputs: `data/processed/pga_2001_2026_20261104/` and
+  `data/interim/features/pga_2001_2026_20261104_round_performance.csv`.
+- Diagnostic: `data/interim/reports/history_refresh/20261104/diagnostic/comparison.json`.
+- Price verification:
+  `data/interim/reports/prospective_price_verification/world_wide_technology_championship_2026/`.
+- Deployment backup on Azure:
+  `/home/azureuser/.cache/hermes-backups/golf-step8-20261105T002402Z/`;
+  activation backup:
+  `/home/azureuser/.cache/hermes-backups/golf-activation-20261105T003248Z/`.

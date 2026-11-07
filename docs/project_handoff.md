@@ -1,6 +1,8 @@
+> History. Current state is this sport’s VM `.dashboard/checkpoint.json`. This file is not the live schedule.
+
 # Golf Props Project Handoff
 
-Last updated: 2026-10-01
+Last updated: 2026-11-05
 
 This is the authoritative continuity document for the repository. A new agent
 should read this file before making changes. It records the project goal,
@@ -66,6 +68,67 @@ structural adaptation; the frozen 365/8/20 strength parameters are unchanged.
 target for such events.
 
 ## Exact Stopping Point
+
+**2026-11-04/05 session (WWT board check, event identity, price readiness, and a history-refresh candidate):**
+
+The live 2026 World Wide Technology Championship forecast archive verifies and
+its board was sent. The archive has 116 players, 111 canonical matches, and the
+five approved tour-prior fallbacks. Both the 2026-11-02 and 2026-11-04 Bovada
+captures now join through the corroborated initialism `WWT Championship ->
+World Wide Technology Championship`: winner coverage 102/116 and 101/116
+respectively, with placement markets 101/116 and make-cut 26/116 in the later
+capture. The no-send verification is under
+`data/interim/reports/prospective_price_verification/world_wide_technology_championship_2026/`.
+
+A reviewed code delta was deployed to Azure: shared event-name equivalence,
+corroborated abbreviation joins, identity diagnostics, price-addendum output,
+history-freshness health, and a versioned history-refresh builder. The live
+suite passes **398 tests** on both Mac and Azure (Python 3.10.12 on Azure).
+Azure backup: `/home/azureuser/.cache/hermes-backups/golf-step8-20261105T002402Z/`.
+
+Active performance inputs were refreshed and activated on 2026-11-05. The
+candidate built at `data/processed/history_refresh/20261104/` was copied to
+versioned active paths:
+
+- canonical: `data/processed/pga_2001_2026_20261104/`
+- round performance:
+  `data/interim/features/pga_2001_2026_20261104_round_performance.csv`
+- live manifest:
+  `data/interim/reports/rolling_round_simulation_validation/frozen_model_manifest.json`
+  (SHA-256 `bb414ca1856d7fefaa877d3cbd6a2c19a28ee967331c89abf2e28391c828e35a`)
+
+The frozen parameters are unchanged at 365/8/20 with cut size 65.
+`source_data_through` is now `2026-10-31`; `prospective_holdout_after` moved to
+the activation date `2026-11-05` so Austin remains eligible. The prior manifest
+(SHA-256 `8ee96b9f…`) is preserved as
+`frozen_model_manifest_pre_20261104.json` on both hosts, and the old canonical
+and round-performance pair remains the rollback. Azure backup of the activated
+code and prior manifest:
+`/home/azureuser/.cache/hermes-backups/golf-activation-20261105T003248Z/`.
+
+The candidate added 12 events, 1,308 result rows, and 4,104 round scores with no
+new duplicate ids or out-of-range rounds. The Open Championship remains excluded
+because the preserved CBS page fails the strict finality check
+(`earnings_column_placeholder_only`); Presidents Cup is excluded as team match
+play. After activation the freshness check reports `stale` with exactly one
+missing event, **The Open Championship**, and
+`missing_immediately_preceding=false`. The latest included event is VidantaWorld
+Mexico Open.
+
+Activation verification on Azure: all three manifest input hashes pass; a dry-run
+weekly pass exited 0 with Austin `awaiting_field` and wrote the new freshness
+state; a retrospective `predict-current-event` on the WWT field verified the new
+inputs and parameters and produced `retrospective_replay` output in `/tmp`. The
+first natural forecast on the refreshed inputs is `austin_championship_2026`
+(official start 2026-11-12). WWT remains an archived incumbent-input forecast
+and was not rewritten.
+
+Price addenda are implemented as separate, deduplicated artifacts keyed by the
+archive manifest and quote-source hashes. A live no-send dry-run on WWT with
+the 2026-11-04 capture verified `priced`, `match=initialism`, 101/116 winner
+coverage, and `readiness=ready` (capture age 10.5h at verification). No addendum
+was sent. When markets appear after a board, use `price-addendum` (dry-run by
+default).
 
 **2026-09-30/10-01 session (return from hiatus, Bank of Utah rescue):**
 

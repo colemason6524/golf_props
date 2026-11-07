@@ -1,42 +1,60 @@
-# Repository Instructions
+# AGENTS.md — golf_props
 
-Before changing code or generated research artifacts:
+Read `/Users/colemason/Predictions/docs/OPERATING_PLAN.md` first, then
+this sport’s **VM** `.dashboard/checkpoint.json`. Those beat this file.
+`docs/project_handoff.md` is the long scientific log. It is not the
+current next-task if it disagrees with the checkpoint.
 
-1. Run `git status --short --branch`.
-2. Read `docs/project_handoff.md` completely. It is the authoritative current
-   state, decision log, scientific guardrail, and next-task document.
-3. Read `docs/research_narrative.md` for the story of learnings, successes,
-   failures, current theory, and outward risks.
-4. Read `README.md` and the documentation linked from the handoff when the task
-   touches that area.
-5. Run `PYTHONPATH=src python3 -m pytest` before substantive changes.
+## Live product
 
-This repository currently has no commits. Most project files are untracked, and
-large research data under `data/` is intentionally ignored. Do not delete,
-reset, clean, or overwrite files merely because Git reports an unusual state.
+PGA Tour forecast. The incumbent is the frozen **365-day / 8-round /
+20-round-variance** simulator. A 2026-11-04 input refresh is activated
+(canonical `pga_2001_2026_20261104`, manifest SHA `bb414ca1`, source
+data through 2026-10-31, prospective holdout after 2026-11-05). Strength
+parameters were not retuned. The open watch is the natural Austin
+Championship board and its post-event grade (checkpoint target
+2026-11-12).
 
-Research rules:
+This is a forecast-quality product (Brier / log loss versus a structural
+baseline). Do not describe that gap as a betting edge. Sportsbook prices
+stay outside the performance model.
 
-- Preserve raw source data before normalization when collection is involved.
-- Enforce point-in-time eligibility: only information available before the
-  prediction timestamp may enter a feature.
-- Keep sportsbook prices outside the performance model; use them only in the
-  comparison/value layer.
-- Treat the frozen 365-day/8-round/20-round-variance simulator as the incumbent
-  until a challenger beats it under the documented paired rolling protocol.
+## Live entrypoints
+
+- Weekly forecast pipeline: `src/golf_props/pipelines/weekly_forecast.py`
+- Discord: `src/golf_props/notifications/discord.py`
+  (`GOLF_PROPS_DISCORD_WEBHOOK_URL`)
+- Price addendum: `src/golf_props/notifications/price_addendum.py`
+- Grades: `data/interim/reports/forecast_grading/<event>/report.md`
+- Azure user timers: `sports-golf-forecast` (every two hours),
+  `sports-golf-bovada`
+- Tests: `PYTHONPATH=src python3 -m pytest` from this repo, using
+  `.venv/bin/python`
+
+## Do not touch / do not confuse
+
+- This repo **has commits**. A Linux `.venv` is historically tracked.
+  Never stage the rebuilt Mac `.venv`. Never `git add` the runtime.
+- `data/` is generated research data and is intentionally large. Do not
+  delete it because Git looks noisy.
 - Do not call previously inspected events a prospective holdout.
-- Do not claim a betting edge from structural-baseline performance tests or the
-  legacy exploratory Bovada value report.
-- Do not describe progress as literally “halfway”; phases are unequal. The
-  binding gap is prospective evidence.
-- Do not apply an ordinary top-65 cut assumption to no-cut playoff events
-  without an explicit, logged event-structure decision.
+- Do not apply an ordinary top-65 cut to no-cut events without a logged
+  event-structure decision.
+- The August 2026 TOUR Championship was a queued task in an older copy
+  of this file. It is not the current next action.
 
-The course identity crosswalk and frozen current-event workflow are complete.
-The simulator now supports explicit `no_cut` event-structure handling and a
-pre-start timestamp guard; frozen 365/8/20 strength is unchanged. Wyndham 2026
-is retrospective only. The exact next queued task is the first genuinely
-prospective frozen forecast for the 2026 TOUR Championship (competitive rounds
-2026-08-27 to 2026-08-30; official field final after BMW concludes on
-2026-08-23), described in `docs/project_handoff.md`. No background process or
-partially completed code edit is active as of the 2026-08-20 handoff refresh.
+## Research rules that still hold
+
+- Preserve raw source data before normalization.
+- Only information available before the prediction timestamp may enter
+  a feature.
+- Keep the frozen 365/8/20 simulator until a challenger beats it under
+  the documented paired rolling protocol.
+- Do not claim a betting edge from structural-baseline tests or the
+  legacy exploratory Bovada value report.
+
+## Where truth lives
+
+- VM checkpoint / journal (current)
+- `docs/project_handoff.md` (scientific log; checkpoint wins on “what next”)
+- `docs/research_narrative.md`, `docs/azure_deployment.md`
