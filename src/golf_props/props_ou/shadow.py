@@ -30,21 +30,36 @@ def _name_index(table: pd.DataFrame) -> Dict[str, str]:
 
 def pick_row(projection: float, sigma: float, ln: lines.RoundLine) -> dict:
     p_over = project.prob_over(projection, ln.line, sigma)
-    p_over_raw = 1.0 / american_to_decimal(ln.over_american)
-    p_under_raw = 1.0 / american_to_decimal(ln.under_american)
-    total = p_over_raw + p_under_raw or 1.0
-    p_market_over = p_over_raw / total
+    quotes = [(s, a) for s, a in (("OVER", ln.over_american),
+                                  ("UNDER", ln.under_american))
+              if a is not None]
+    if len(quotes) == 2:
+        p_over_raw = 1.0 / american_to_decimal(quotes[0][1])
+        p_under_raw = 1.0 / american_to_decimal(quotes[1][1])
+        total = p_over_raw + p_under_raw or 1.0
+        p_market = {"OVER": p_over_raw / total,
+                    "UNDER": p_under_raw / total}
+    else:
+        p_market = {}
     sides = []
-    for side, p_model, p_market, american in (
-            ("OVER", p_over, p_market_over, ln.over_american),
-            ("UNDER", 1.0 - p_over, 1.0 - p_market_over, ln.under_american)):
+    for side, american in quotes:
+        p_model = p_over if side == "OVER" else 1.0 - p_over
         decimal = american_to_decimal(american)
-        sides.append({"side": side, "p_model": p_model, "p_market": p_market,
+        p_mkt = p_market.get(side)
+        edge = None if p_mkt is None else p_model - p_mkt
+        ev = None if p_mkt is None else p_model * decimal - 1.0
+        sides.append({"side": side, "p_model": p_model, "p_market": p_mkt,
                       "american": american, "decimal": decimal,
-                      "edge": p_model - p_market,
-                      "ev": p_model * decimal - 1.0})
-    best = max(sides, key=lambda s: s["ev"])
-    playable = (EV_MIN <= best["ev"] <= EV_MAX) and best["edge"] >= EDGE_MIN
+                      "edge": edge, "ev": ev})
+    if len(sides) == 1:
+        # one recorded price: lean without an EV claim, never synthesized
+        only = dict(sides[0])
+        only["tier"] = "OBSERVED_LEAN"
+        only["sigma"] = sigma
+        return only
+    best = max(sides, key=lambda s: s["ev"] if s["ev"] is not None else -9e9)
+    playable = (best["ev"] is not None and EV_MIN <= best["ev"] <= EV_MAX
+                and best["edge"] is not None and best["edge"] >= EDGE_MIN)
     return {"side": best["side"], "p_model": best["p_model"],
             "p_market": best["p_market"], "american": best["american"],
             "decimal": best["decimal"], "edge": best["edge"], "ev": best["ev"],
@@ -72,7 +87,8 @@ def build_picks(table: pd.DataFrame, proj: pd.DataFrame,
                "event_name": ln.event_name, "player_id": pid,
                "player_name": ln.player_name, "round_number": ln.round_number,
                "line": ln.line, "projection": round(float(match.projection), 2),
-               "source": "fanduel", "result": "open", "units": 0.0,
+               "source": ln.source, "provenance": ln.provenance,
+               "result": "open", "units": 0.0,
                "settled_at": None}
         row.update(pick_row(float(match.projection), float(match.sigma), ln))
         if row["tier"] == "PLAYABLE":
@@ -86,11 +102,20 @@ def run(event_id: Optional[str] = None, capture: bool = True,
         lines_override: Optional[List[lines.RoundLine]] = None) -> dict:
     ensure_dirs()
     table = round_table()
-    proj = project.project(table)
     captured = (lines_override if lines_override is not None
                 else lines.fetch(capture))
     if event_id is not None:
         captured = [ln for ln in captured if ln.event_id == event_id]
+    if event_id is not None and table[table["event_id"] == event_id].empty:
+        # upcoming event (no rows yet): price each lined round from history
+        frames = []
+        for (eid, rnd) in sorted({(ln.event_id, ln.round_number)
+                                  for ln in captured}):
+            nm = next(ln.event_name for ln in captured if ln.event_id == eid)
+            frames.append(project.project_new_event(table, eid, nm, rnd))
+        proj = pd.concat(frames, ignore_index=True) if frames else table.iloc[0:0]
+    else:
+        proj = project.project(table)
     rows, diag = build_picks(table, proj, captured)
     existing = {ledger.pick_id(r) for r in ledger.read()}
     new_rows = [r for r in rows if ledger.pick_id(r) not in existing]

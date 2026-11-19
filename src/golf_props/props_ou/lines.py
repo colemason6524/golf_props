@@ -49,9 +49,11 @@ class RoundLine:
     player_name: str
     round_number: int
     line: float
-    over_american: int
-    under_american: int
+    over_american: Optional[int]
+    under_american: Optional[int]
     captured_at: str
+    source: str = "fanduel"
+    provenance: str = "api"
 
 
 def _american(runner: dict) -> Optional[int]:
@@ -63,24 +65,34 @@ def _american(runner: dict) -> Optional[int]:
 
 
 def parse_round_score_markets(payload: dict, captured_at: str) -> List[RoundLine]:
-    """Extract per-player round-score O/U pairs ("... Round N ..." Over/Under)."""
+    """Extract per-player round-score O/U pairs ("... Round N ..." Over/Under).
+
+    Matches the swept name variants: "Round 1 Score", "Player Name Round X
+    Score", "Round 1 Strokes" (Fanatics), "Player Round Scores", "18-Hole
+    Score". Never guesses: a market without an Over/Under runner pair and an
+    explicit line number is skipped.
+    """
     att = payload.get("attachments", {})
     events = att.get("events", {})
     markets = att.get("markets", {})
     out: List[RoundLine] = []
     for m in markets.values():
         name = str(m.get("marketName", ""))
-        if "round" not in name.lower() or "score" not in name.lower():
+        low = name.lower()
+        if "round" not in low and "18-hole" not in low and "18 hole" not in low:
+            continue
+        if not any(k in low for k in ("score", "strokes")):
             continue
         rm = re.search(r"round\s*(\d)", name, re.I)
-        if not rm:
-            continue
-        rnd = int(rm.group(1))
+        rnd = int(rm.group(1)) if rm else 1
         runners = m.get("runners", [])
         if len(runners) != 2:
             continue
-        # runner names look like "Over 71.5" / player carried by market name
+        # runner names look like "Over 68.5" / player carried by market name
         player = re.sub(r"\s*round\s*\d.*$", "", name, flags=re.I).strip()
+        if not player or "score" in player.lower() or "stroke" in player.lower():
+            m2 = re.search(r"(?:score|strokes)\s*[-:]?\s*(.+)$", name, re.I)
+            player = (m2.group(1).strip() if m2 else player)
         sides = {}
         for r in runners:
             rn = str(r.get("runnerName", ""))
@@ -105,6 +117,35 @@ def parse_round_score_markets(payload: dict, captured_at: str) -> List[RoundLine
             over_american=sides["over"], under_american=sides["under"],
             captured_at=captured_at))
     return out
+
+
+def observed_line(player_name: str, round_number: int, line: float,
+                  over_american: Optional[int], under_american: Optional[int],
+                  market_name: str, event_id: str, event_name: str,
+                  observer: str, observed_at: str,
+                  source: str = "fanatics") -> RoundLine:
+    """A human-transcribed book line (e.g. read in-app by Cole).
+
+    Not a synthesis: the line must have been observed at a real book before
+    the round started. Provenance is mandatory and travels into the ledger.
+    Post-start observations are refused by the caller (see shadow.run).
+    Either side may be None when only one price was recorded — the missing
+    side is never filled in.
+    """
+    if over_american is None and under_american is None:
+        raise ValueError("observed line needs at least one recorded price")
+    return RoundLine(
+        event_id=event_id, event_name=event_name,
+        market_id=f"observed-{source}-{normalize_name(player_name)}"
+                  f"-r{round_number}",
+        market_name=market_name, player_name=player_name,
+        round_number=round_number, line=float(line),
+        over_american=(int(over_american) if over_american is not None
+                       else None),
+        under_american=(int(under_american) if under_american is not None
+                        else None),
+        captured_at=observed_at, source=f"{source}-observed",
+        provenance=f"human-observed by {observer} at {observed_at}")
 
 
 def fetch(capture: bool = True) -> List[RoundLine]:

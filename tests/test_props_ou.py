@@ -63,3 +63,36 @@ def test_gates_closed_on_empty():
     assert publish.soft_publish_gate([]) == (False, "no fully settled shadow event yet")
     ok, _ = publish.graduation([])
     assert not ok
+
+
+def test_parse_strokes_variant():
+    payload = {"attachments": {
+        "events": {"E9": {"name": "PGA The RSM Classic 2026"}},
+        "markets": {"M9": {
+            "marketId": "M9", "eventId": "E9",
+            "marketName": "Michael Thorbjornsen Round 1 Strokes",
+            "runners": [
+                {"runnerName": "Over 67.5",
+                 "winRunnerOdds": {"americanOdds": -120}, "handicap": 0},
+                {"runnerName": "Under 67.5",
+                 "winRunnerOdds": {"americanOdds": 100}, "handicap": 0}],
+        }},
+    }}
+    out = lines.parse_round_score_markets(payload, "2026-11-19T00:00:00+00:00")
+    assert len(out) == 1
+    ln = out[0]
+    assert (ln.player_name, ln.round_number, ln.line) == ("Michael Thorbjornsen", 1, 67.5)
+    assert (ln.over_american, ln.under_american) == (-120, 100)
+
+
+def test_observed_line_one_sided():
+    from golf_props.props_ou import shadow
+    ln = lines.observed_line(
+        "Michael Thorbjornsen", 1, 67.5, -120, None,
+        "Michael Thorbjornsen Round 1 Strokes", "rsm-classic-2026",
+        "PGA The RSM Classic 2026", "Cole", "2026-11-19T04:30:00+00:00")
+    assert ln.source == "fanatics-observed"
+    row = shadow.pick_row(70.08, 3.30, ln)
+    assert row["side"] == "OVER" and row["tier"] == "OBSERVED_LEAN"
+    assert row["ev"] is None and row["p_market"] is None
+    assert row["p_model"] > 0.75
