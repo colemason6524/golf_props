@@ -62,10 +62,18 @@ updates only the two golf timers and services.
 |---|---|---|
 | `sports-golf-forecast.timer` | Every two hours at minute 17, America/Detroit | Run the fail-closed weekly frozen forecast loop |
 | `sports-golf-bovada.timer` | Monday, Wednesday, Thursday at 08:56, America/Detroit | Preserve current Bovada PGA odds snapshot |
+| `sports-golf-props-ou-grade.timer` | Daily at 08:00, America/New_York | Settle round-score O/U paper rows for rounds that are final |
 
-Both timers use `Persistent=true`: a VM restart or downtime causes one missed
-activation to run when the user manager returns. The forecast code still
-enforces the pre-start guard, so a late recovery cannot backfill a forecast.
+The forecast and Bovada timers use `Persistent=true`: a VM restart or downtime
+causes one missed activation to run when the user manager returns. The forecast
+code still enforces the pre-start guard, so a late recovery cannot backfill a
+forecast. The props_ou grade timer uses `Persistent=false` (a late fire would
+grade after the next round's capture) and only settles rounds that already have
+realized scores, so a run with nothing final is a no-op.
+
+`install_systemd_timers.sh` installs every `sports-golf-*` unit but enables only
+forecast and Bovada; the grade timer is enabled once with
+`systemctl --user enable --now sports-golf-props-ou-grade.timer`.
 
 Timing: the forecast uses exact tee times when available; otherwise it falls
 back to the official event date with a conservative 22-hour night-before offset.

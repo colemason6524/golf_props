@@ -1,0 +1,10 @@
+[Unit]
+Description=Golf round-score O/U grade (settle rounds that are final)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=%h/golf_props/scripts/run_props_ou_task.sh
+
+[Service]
+Type=oneshot
+ExecStart=%h/golf_props/scripts/run_props_ou_task.sh grade
+TimeoutStartSec=infinity

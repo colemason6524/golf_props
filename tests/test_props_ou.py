@@ -129,3 +129,32 @@ def test_unpriced_rows_do_not_block_a_clean_event():
              "result": "no_pick", "units": 0.0}]
     ev = publish.settled_events(rows)["E"]
     assert ev["no_pick"] == 1 and ev["open"] == 0 and ev["clean"] is True
+
+
+def _ingest_cli():
+    import sys
+    from pathlib import Path
+    scripts = str(Path(__file__).resolve().parents[1] / "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import props_ou_ingest
+    return props_ou_ingest
+
+
+def test_ingest_lines_file_parser(tmp_path):
+    """Verbatim rows survive; a malformed row raises instead of guessing."""
+    cli = _ingest_cli()
+    f = tmp_path / "lines.csv"
+    f.write_text("player,line,over,under\n"
+                 "Harris English,68.5,102,-138\n"
+                 "Michael Thorbjornsen,67.5,-120,\n", encoding="utf-8")
+    assert cli.load_lines(f) == [("Harris English", 68.5, 102, -138),
+                                ("Michael Thorbjornsen", 67.5, -120, None)]
+    f.write_text("player,line,over,under\nHarris English,abc,102,-138\n",
+                 encoding="utf-8")
+    try:
+        cli.load_lines(f)
+    except ValueError as err:
+        assert "lines.csv:2" in str(err)
+    else:
+        raise AssertionError("malformed line was accepted")

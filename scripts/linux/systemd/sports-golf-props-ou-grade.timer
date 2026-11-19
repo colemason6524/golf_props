@@ -1,0 +1,12 @@
+[Unit]
+Description=Schedule Golf round-score O/U grade daily at 08:00 ET
+
+[Timer]
+OnCalendar=*-*-* 08:00:00 America/New_York
+AccuracySec=1s
+RandomizedDelaySec=0
+Persistent=false
+Unit=sports-golf-props-ou-grade.service
+
+[Install]
+WantedBy=timers.target
