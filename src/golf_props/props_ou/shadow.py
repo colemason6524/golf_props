@@ -8,6 +8,8 @@ published cohort. Nothing is priced without a captured book line.
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -26,6 +28,40 @@ def _name_index(table: pd.DataFrame) -> Dict[str, str]:
         subset=["player_id"], keep="last")
     return {lines.normalize_name(str(r.player_name)): str(r.player_id)
             for r in d.itertuples()}
+
+
+def _fold_key(name: str) -> str:
+    """Second-chance key: diacritics folded, parenthetical tags dropped.
+
+    Only consulted when the exact key misses, so "Michael Thorbjornsen" never
+    resolves through his amateur "(a)" row.
+    """
+    text = unicodedata.normalize("NFKD", str(name)).encode(
+        "ascii", "ignore").decode("ascii")
+    return lines.normalize_name(re.sub(r"\([^)]*\)", " ", text))
+
+
+def _fold_index(table: pd.DataFrame) -> Dict[str, Optional[str]]:
+    """Folded name -> player_id, or None when the fold is ambiguous."""
+    d = table.sort_values("event_date_end").drop_duplicates(
+        subset=["player_id"], keep="last")
+    out: Dict[str, Optional[str]] = {}
+    for r in d.itertuples():
+        key = _fold_key(str(r.player_name))
+        pid = str(r.player_id)
+        if key in out and out[key] != pid:
+            out[key] = None
+        else:
+            out.setdefault(key, pid)
+    return out
+
+
+def resolve_player(index: Dict[str, str], folded: Dict[str, Optional[str]],
+                   name: str) -> Optional[str]:
+    key = lines.normalize_name(name)
+    if key in index:
+        return index[key]
+    return folded.get(_fold_key(name))
 
 
 def pick_row(projection: float, sigma: float, ln: lines.RoundLine) -> dict:
@@ -69,11 +105,12 @@ def pick_row(projection: float, sigma: float, ln: lines.RoundLine) -> dict:
 def build_picks(table: pd.DataFrame, proj: pd.DataFrame,
                 captured: List[lines.RoundLine]) -> Tuple[List[dict], dict]:
     index = _name_index(table)
+    folded = _fold_index(table)
     by_key = {(str(r.player_id), int(r.round_number)): r for r in proj.itertuples()}
     rows, diag = [], {"lines": len(captured), "matched": 0, "unmatched": 0,
                       "playable": 0}
     for ln in captured:
-        pid = index.get(lines.normalize_name(ln.player_name))
+        pid = resolve_player(index, folded, ln.player_name)
         if not pid:
             diag["unmatched"] += 1
             continue
@@ -87,6 +124,8 @@ def build_picks(table: pd.DataFrame, proj: pd.DataFrame,
                "event_name": ln.event_name, "player_id": pid,
                "player_name": ln.player_name, "round_number": ln.round_number,
                "line": ln.line, "projection": round(float(match.projection), 2),
+               "over_american": ln.over_american,
+               "under_american": ln.under_american,
                "source": ln.source, "provenance": ln.provenance,
                "result": "open", "units": 0.0,
                "settled_at": None}

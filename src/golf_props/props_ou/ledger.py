@@ -37,9 +37,10 @@ def append(rows: Iterable[dict], path: Optional[Path] = None) -> int:
 
 
 def pick_id(row: dict) -> str:
-    return "|".join(str(row[k]) for k in
+    # source is part of the identity: one row per (player, round, book).
+    return "|".join(str(row.get(k)) for k in
                     ("date", "player_id", "event_id", "round_number",
-                     "line", "side"))
+                     "line", "side", "source"))
 
 
 def write(rows: List[dict], path: Optional[Path] = None) -> int:

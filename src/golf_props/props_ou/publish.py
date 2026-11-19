@@ -45,11 +45,15 @@ def settled_events(rows: List[dict]) -> Dict[str, dict]:
     for row in rows:
         key = str(row.get("event_id", ""))
         rec = out.setdefault(key, {"rows": 0, "settled": 0, "open": 0,
-                                   "playable": 0, "units": 0.0,
+                                   "no_pick": 0, "playable": 0, "units": 0.0,
                                    "event_name": row.get("event_name", "")})
         rec["rows"] += 1
         if row.get("tier") == "PLAYABLE":
             rec["playable"] += 1
+        if row.get("result") == "no_pick":
+            # observed line recorded without a priceable side; never settles
+            rec["no_pick"] += 1
+            continue
         if row.get("result") in ("win", "loss", "push", "void_unplayed",
                                  "void_unmatched"):
             rec["settled"] += 1

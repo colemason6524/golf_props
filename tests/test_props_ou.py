@@ -1,7 +1,7 @@
 """Round-score O/U scaffold self-check: projection math, FanDuel parse, grading."""
 import pandas as pd
 
-from golf_props.props_ou import grade, ledger, lines, project, publish
+from golf_props.props_ou import grade, ledger, lines, project, publish, shadow
 
 
 def test_prob_over_symmetry():
@@ -96,3 +96,36 @@ def test_observed_line_one_sided():
     assert row["side"] == "OVER" and row["tier"] == "OBSERVED_LEAN"
     assert row["ev"] is None and row["p_market"] is None
     assert row["p_model"] > 0.75
+
+
+def test_pick_id_is_source_aware():
+    """One row per (player, round, book): same line at two books is two rows."""
+    base = {"date": "d", "player_id": "p", "event_id": "E", "round_number": 1,
+            "line": 67.5, "side": "OVER"}
+    a = dict(base, source="draftkings-browser-read")
+    b = dict(base, source="fanatics-observed")
+    assert ledger.pick_id(a) != ledger.pick_id(b)
+
+
+def test_folded_name_resolves_amateur_and_diacritics():
+    table = pd.DataFrame([
+        {"player_id": "p_koivun", "player_name": "Jackson Koivun (a)"},
+        {"player_id": "p_val", "player_name": "Sami V\u00e4lim\u00e4ki"},
+        {"player_id": "p_thor", "player_name": "Michael Thorbjornsen (a)"},
+        {"player_id": "p_pro", "player_name": "Michael Thorbjornsen"},
+    ]).assign(event_date_end="2026-01-01")
+    index, folded = shadow._name_index(table), shadow._fold_index(table)
+    assert shadow.resolve_player(index, folded, "Jackson Koivun") == "p_koivun"
+    assert shadow.resolve_player(index, folded, "Sami Valimaki") == "p_val"
+    # exact match wins: never resolves through the amateur row
+    assert shadow.resolve_player(index, folded, "Michael Thorbjornsen") == "p_pro"
+    assert shadow.resolve_player(index, folded, "Nobody Here") is None
+
+
+def test_unpriced_rows_do_not_block_a_clean_event():
+    rows = [{"event_id": "E", "event_name": "E", "tier": "PLAYABLE",
+             "result": "win", "units": 0.9},
+            {"event_id": "E", "event_name": "E", "tier": "NO_VALUE",
+             "result": "no_pick", "units": 0.0}]
+    ev = publish.settled_events(rows)["E"]
+    assert ev["no_pick"] == 1 and ev["open"] == 0 and ev["clean"] is True
